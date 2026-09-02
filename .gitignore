@@ -1,0 +1,28 @@
+# Secrets — never commit. See *.example counterparts for the shape.
+.htaccess
+_papyr/config/secret.php
+.env
+.env.*
+!.env.example
+
+# Regenerable — Scanner rebuilds this from the filesystem on demand.
+_papyr/cache/*
+!_papyr/cache/.gitkeep
+
+# Composer-managed — installed via `composer install` inside _papyr/.
+_papyr/vendor/
+
+# Local backups / scratch — not part of the tracked source tree.
+BKUP/
+
+# Dev screenshots — not curated for public docs yet.
+*_screnshot.jpg
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+.zencoder/
+.zenflow/

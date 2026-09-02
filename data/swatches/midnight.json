@@ -1,0 +1,17 @@
+{
+  "name": "Midnight",
+  "tokens": {
+    "accent-h": "215",
+    "accent-s": "65%",
+    "accent-l": "53%",
+    "text-h": "216",
+    "text-s": "43%",
+    "text-l": "93%",
+    "bg-h": "222",
+    "bg-s": "48%",
+    "bg-l": "5%",
+    "border-h": "220",
+    "border-s": "48%",
+    "border-l": "17%"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "Crimson Thread",
+  "tokens": {
+    "accent-h": "349",
+    "accent-s": "61%",
+    "accent-l": "48%",
+    "text-h": "45",
+    "text-s": "15%",
+    "text-l": "89%",
+    "bg-h": "330",
+    "bg-s": "25%",
+    "bg-l": "3%",
+    "border-h": "349",
+    "border-s": "35%",
+    "border-l": "12%"
+  }
+}

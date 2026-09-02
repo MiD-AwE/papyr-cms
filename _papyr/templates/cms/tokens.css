@@ -1,0 +1,41 @@
+/*
+ * PapyrCMS token map — canonical source for the theme token contract.
+ *
+ * COMPONENT tokens: HSL triplets — adjusted by the theme panel and
+ *   persisted to data/themes/{pageKey}.json via api/save-theme.php.
+ *   papyr_theme_css() overrides these at runtime with saved values.
+ *
+ * COMPOSED tokens: derived from components via var(). Never hardcode
+ *   colour values here; always reference the components above so that
+ *   a single slider change propagates everywhere.
+ *
+ * TokenRegistry reads this file to enumerate defined names. Template
+ *   files are scanned for var() references. Bound / unbound / missing
+ *   status is the reconciliation output.
+ */
+
+:root {
+
+  /* ── Component tokens ──────────────────────────────────────────── */
+  --accent-h:   194;   --accent-s:  100%;  --accent-l:   84%;
+  --accent2-h:  194;   --accent2-s:  76%;  --accent2-l:  50%;
+  --bg-h:       205;   --bg-s:       71%;  --bg-l:        9%;
+  --text-h:     255;   --text-s:    100%;  --text-l:      84%;
+
+  /* ── Composed tokens ───────────────────────────────────────────── */
+  --accent:        hsl(var(--accent-h)  var(--accent-s)  var(--accent-l));
+  --accent2:       hsl(var(--accent2-h) var(--accent2-s) var(--accent2-l));
+  --bg:            hsl(var(--bg-h)  var(--bg-s)  var(--bg-l));
+  --bg-deep:       hsl(var(--bg-h)  var(--bg-s)  calc(var(--bg-l) - 4%));
+  --text:          hsl(var(--text-h) var(--text-s) var(--text-l) / .88);
+  --text-dim:      hsl(var(--text-h) calc(var(--text-s) - 10%) calc(var(--text-l) + 2%) / .45);
+  --border:        hsl(var(--accent2-h) 100% 39% / .09);
+  --border-bright: hsl(var(--accent2-h) 100% 39% / .22);
+  --card-bg:       hsl(var(--bg-h) var(--bg-s) calc(var(--bg-l) - 3%) / .92);
+  --overlay-bg:    hsl(var(--bg-h) var(--bg-s) calc(var(--bg-l) - 4%) / .97);
+  --qr-glow:       hsl(var(--accent-h) var(--accent-s) var(--accent-l) / .15);
+  --tp-track: hsl(var(--accent-h) var(--accent-s) var(--accent-l) / .2);
+  --tp-track-hover: hsl(var(--accent-h) var(--accent-s) var(--accent-l) / .28);
+  --text-faint:    hsl(var(--text-h) calc(var(--text-s) - 10%) calc(var(--text-l) + 2%) / .45);
+
+}

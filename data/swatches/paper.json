@@ -1,0 +1,17 @@
+{
+  "name": "Paper",
+  "tokens": {
+    "accent-h": "13",
+    "accent-s": "62%",
+    "accent-l": "44%",
+    "text-h": "30",
+    "text-s": "13%",
+    "text-l": "9%",
+    "bg-h": "42",
+    "bg-s": "31%",
+    "bg-l": "94%",
+    "border-h": "42",
+    "border-s": "20%",
+    "border-l": "81%"
+  }
+}

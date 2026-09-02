@@ -1,0 +1,17 @@
+{
+  "name": "Amber Glass",
+  "tokens": {
+    "accent-h": "41",
+    "accent-s": "70%",
+    "accent-l": "50%",
+    "text-h": "45",
+    "text-s": "44%",
+    "text-l": "89%",
+    "bg-h": "36",
+    "bg-s": "56%",
+    "bg-l": "4%",
+    "border-h": "39",
+    "border-s": "52%",
+    "border-l": "13%"
+  }
+}

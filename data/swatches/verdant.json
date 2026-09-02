@@ -1,0 +1,17 @@
+{
+  "name": "Verdant",
+  "tokens": {
+    "accent-h": "149",
+    "accent-s": "57%",
+    "accent-l": "43%",
+    "text-h": "140",
+    "text-s": "29%",
+    "text-l": "92%",
+    "bg-h": "147",
+    "bg-s": "43%",
+    "bg-l": "4%",
+    "border-h": "145",
+    "border-s": "43%",
+    "border-l": "13%"
+  }
+}
