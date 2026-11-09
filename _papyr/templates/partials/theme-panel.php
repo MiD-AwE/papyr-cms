@@ -69,6 +69,23 @@ $_papyrSaveUrl = $_papyrBasePath . '/_papyr/api/save-theme.php';
   font-family: inherit;
 }
 #theme-panel.open { max-height: 74dvh; overflow-y: auto; opacity: 1; }
+#theme-panel .tp-pad { position: relative; }
+.tp-close {
+  position: absolute; top: .55rem; right: .6rem; background: none; border: 0;
+  color: var(--text-dim, #889); font-size: .85rem; cursor: pointer; line-height: 1;
+}
+.tp-close:hover { color: var(--accent, #5ad1c5); }
+.tp-access { margin-bottom: 1rem; padding-bottom: .9rem; border-bottom: 1px solid var(--border, rgba(100,120,160,.15)); }
+.tp-access-state { display: block; font-size: .72rem; color: var(--text, #dde); margin: 0 0 .45rem; }
+.tp-access-row { display: flex; gap: .4rem; }
+.tp-access-row input {
+  flex: 1; min-width: 0; font: inherit; font-size: .75rem; padding: .35rem .5rem; border-radius: 4px;
+  color: var(--text, #dde); background: var(--bg, #0a0c12); border: 1px solid var(--border-bright, rgba(100,120,160,.22));
+}
+.tp-access a.tp-btn { display: inline-block; text-decoration: none; }
+.tp-admin-link { display: inline-block; margin-top: .5rem; font-size: .62rem; color: var(--text-dim, #889); }
+.tp-admin-link:hover { color: var(--accent, #5ad1c5); }
+.tp-access-msg { font-size: .68rem; color: var(--text-dim, #889); margin: .4rem 0 0; min-height: 1em; }
 #theme-panel .tp-pad { padding: .9rem 1rem 1rem; }
 #theme-panel h4 {
   font-size: .55rem; letter-spacing: .28em; text-transform: uppercase;
@@ -142,6 +159,33 @@ $_papyrSaveUrl = $_papyrBasePath . '/_papyr/api/save-theme.php';
 
 <div id="theme-panel" role="dialog" aria-label="Theme settings">
   <div class="tp-pad">
+    <button type="button" class="tp-close" onclick="toggleThemePanel()" aria-label="Close settings">✕</button>
+
+    <?php if (($_papyrInviteReady ?? false) || ($_papyrIsAdmin ?? false)): ?>
+    <h4>Access</h4>
+    <div class="tp-access">
+      <?php if ($_papyrIsAdmin ?? false): ?>
+        <p class="tp-access-state">Signed in as admin. Discussion unlocked.</p>
+        <a class="tp-btn" href="<?= htmlspecialchars(($_papyrBasePath ?? '') . '/_papyr/login.php?action=logout', ENT_QUOTES, 'UTF-8') ?>">Log out</a>
+      <?php elseif ($_papyrIsMember ?? false): ?>
+        <p class="tp-access-state">🔓 Discussion unlocked</p>
+        <button type="button" class="tp-btn" onclick="papyrLock()">Lock</button>
+      <?php else: ?>
+        <form onsubmit="return papyrUnlock(event)" autocomplete="off">
+          <label for="tp-invite" class="tp-access-state">🔒 Invite password</label>
+          <div class="tp-access-row">
+            <input id="tp-invite" type="password" required maxlength="200" autocomplete="current-password">
+            <button type="submit" class="tp-btn">Unlock</button>
+          </div>
+        </form>
+      <?php endif; ?>
+      <?php if (!($_papyrIsAdmin ?? false)): ?>
+        <a class="tp-admin-link" href="<?= htmlspecialchars(($_papyrBasePath ?? '') . '/_papyr/login.php', ENT_QUOTES, 'UTF-8') ?>">Site admin? Log in</a>
+      <?php endif; ?>
+      <p id="tp-access-msg" class="tp-access-msg" role="status"></p>
+    </div>
+    <?php endif; ?>
+
     <h4>Palette</h4>
     <div class="tp-mode">
       <div id="tp-mode-switch" class="tp-mode-switch" onclick="toggleMode()" role="switch" aria-label="Light / dark"></div>
@@ -164,6 +208,8 @@ $_papyrSaveUrl = $_papyrBasePath . '/_papyr/api/save-theme.php';
   var ROOT     = document.documentElement;
   var PANEL    = document.getElementById('theme-panel');
   var SAVE_URL = <?= json_encode($_papyrSaveUrl) ?>;
+  var UNLOCK_URL = <?= json_encode($_papyrBasePath . '/_papyr/api/unlock.php') ?>;
+  var PAGE_KEY = <?= json_encode($_papyrPageKey ?? '') ?>;
 
   /* ---- Token discovery ----
      Scans stylesheet :root rules for --*-h properties, then confirms the
@@ -314,6 +360,41 @@ $_papyrSaveUrl = $_papyrBasePath . '/_papyr/api/save-theme.php';
     if (PANEL.classList.contains('open')) syncSlidersFromRoot();
   };
 
+  /* ---- Access: invite-only participant unlock ---- */
+  window.papyrOpenUnlock = function () {
+    if (!PANEL.classList.contains('open')) toggleThemePanel();
+    var input = document.getElementById('tp-invite');
+    if (input) { setTimeout(function () { input.focus(); }, 150); }
+    PANEL.scrollTop = 0;
+  };
+
+  function accessCall(payload, msgEl) {
+    if (msgEl) msgEl.textContent = '…';
+    return fetch(UNLOCK_URL, {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d.ok) { location.reload(); return; }
+        if (msgEl) msgEl.textContent = d.error || 'Something went wrong.';
+      })
+      .catch(function () { if (msgEl) msgEl.textContent = 'Network error — try again.'; });
+  }
+
+  window.papyrUnlock = function (ev) {
+    ev.preventDefault();
+    var input = document.getElementById('tp-invite');
+    accessCall({ action: 'unlock', pass: input.value }, document.getElementById('tp-access-msg'));
+    input.value = '';
+    return false;
+  };
+
+  window.papyrLock = function () {
+    accessCall({ action: 'lock' }, document.getElementById('tp-access-msg'));
+  };
+
   /* ---- Reset ---- */
   window.resetTheme = function () {
     Object.keys(DEFAULTS).forEach(function (v) {
@@ -336,13 +417,11 @@ $_papyrSaveUrl = $_papyrBasePath . '/_papyr/api/save-theme.php';
       });
     });
 
-    /* pageKey: path relative to site root, slashes→underscores, no extension.
-       e.g. /tutorials/installation.php → tutorials_installation             */
-    var pageKey = location.pathname
-      .replace(/^\//, '')
-      .replace(/\//g, '_')
-      .replace(/\.[^.]+$/, '')
-      || 'index';
+    /* pageKey comes from the server (papyr_page_key, relative to the SITE ROOT),
+       so subfolder installs like /SolarPoweredBugZapper/research.php save to
+       "research", matching what load-theme.php reads. Deriving it from
+       location.pathname would include the install folder in the key. */
+    var pageKey = PAGE_KEY || 'index';
 
     fetch(SAVE_URL, {
       method:  'POST',

@@ -26,3 +26,9 @@ Thumbs.db
 *.swp
 .zencoder/
 .zenflow/
+
+# Invite-only participant secret (see _papyr/bin/set-invite-pass.php)
+_papyr/config/invite.php
+
+# Participant comments — site content written at runtime
+data/comments/

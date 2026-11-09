@@ -26,8 +26,15 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 $_papyrIsAdmin = ($_SESSION['papyr_admin'] ?? false) === true;
 
+use Papyr\Core\MemberAuth;
 use Papyr\Core\NavBuilder;
 use Papyr\Core\UrlResolver;
+
+// Participant session — invite password unlocks comments (never admin rights).
+// Admins count as participants. See Papyr\Core\MemberAuth.
+$_papyrIsMember     = MemberAuth::isMember();
+$_papyrInviteReady  = MemberAuth::configured();
+$_papyrCsrf         = $_papyrIsMember ? MemberAuth::csrfToken() : '';
 
 // Single managed site
 $_papyrSiteKey  = (string) array_key_first($sites);
@@ -49,6 +56,7 @@ $_papyrTree  = NavBuilder::tree($_papyrPages);
 // Server-inject saved theme into :root — eliminates flash of default colors
 $_papyrPageFile = $_SERVER['SCRIPT_FILENAME'] ?? __FILE__;
 $_papyrTheme    = papyr_load_theme($_papyrPageFile, $_papyrSiteRoot);
+$_papyrPageKey  = papyr_page_key($_papyrPageFile, $_papyrSiteRoot);   // same key themes and comments use
 
 // Active path (relative to site root) for active-link highlighting
 $_papyrActive = ltrim(
@@ -186,19 +194,54 @@ body {
   margin-left: 220px;
 }
 
-@media (max-width: 640px) {
-  #papyr-nav {
-    position: relative; width: 100%;
-    height: auto; bottom: auto; padding-bottom: 0;
-    border-right: none; border-bottom: 1px solid var(--border-bright);
-  }
-  body { margin-left: 0; }
-  .pn-tree { display: flex; flex-wrap: wrap; padding: .3rem .5rem; }
-  .pn-tree li { display: inline-block; }
-  .pn-dir-label { display: none; }
-  .pn-dir > ul { display: inline-flex; padding-left: 0; }
+/* Drawer footer: settings / unlock entry point (shown in the mobile drawer) */
+.pn-foot { display: none; }
+.pn-foot button {
+  width: 100%; text-align: left; font: inherit; font-size: .68rem; letter-spacing: .05em;
+  color: var(--text-dim); background: none; border: 0; border-top: 1px solid var(--border);
+  padding: .8rem 1rem; cursor: pointer;
 }
+.pn-foot button:hover { color: var(--accent); }
+
+#pn-burger, #pn-scrim { display: none; }
+
+/* ==============================================================
+   Mobile: off-canvas drawer behind a hamburger
+   ============================================================== */
+@media (max-width: 640px) {
+  body { margin-left: 0; }
+
+  #pn-burger {
+    display: grid; place-items: center;
+    position: fixed; top: 10px; left: 10px; z-index: 600;
+    width: 42px; height: 42px; border-radius: 10px;
+    background: var(--card-bg); color: var(--accent);
+    border: 1px solid var(--border-bright);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    font-size: 1.25rem; line-height: 1; cursor: pointer;
+  }
+  #papyr-nav {
+    width: min(280px, 82vw); z-index: 550; padding-bottom: 0;
+    transform: translateX(-100%); transition: transform .25s ease;
+    padding-top: 52px; background: var(--bg-deep, var(--bg));
+  }
+  body.pn-open #papyr-nav { transform: none; box-shadow: 0 0 40px rgb(0 0 0 / .5); }
+  body.pn-open #pn-scrim {
+    display: block; position: fixed; inset: 0; z-index: 540; background: rgb(0 0 0 / .45);
+  }
+  .pn-tree a { font-size: .85rem; padding: .7rem 1rem; }
+  .pn-foot { display: block; }
+
+  /* Settings live in the drawer on phones; the floating gear steps aside.
+     (html body … so these beat theme-panel.php's own rules, which load later.) */
+  html body #theme-toggle { display: none; }
+  html body #theme-panel { left: 10px; right: 10px; bottom: 10px; width: auto; z-index: 610; }
+}
+@media (prefers-reduced-motion: reduce) { #papyr-nav { transition: none; } }
 </style>
+
+<button id="pn-burger" type="button" aria-label="Open menu" aria-controls="papyr-nav" aria-expanded="false" onclick="papyrToggleNav()">☰</button>
+<div id="pn-scrim" onclick="papyrToggleNav(false)"></div>
 
 <nav id="papyr-nav" aria-label="Site navigation">
   <div class="pn-brand">
@@ -207,9 +250,29 @@ body {
   <ul class="pn-tree" id="pn-tree">
     <?php papyrNavTree($_papyrTree, $_papyrActive, 0, $_papyrUrlBase) ?>
   </ul>
+  <div class="pn-foot">
+    <button type="button" onclick="papyrToggleNav(false); toggleThemePanel()">⚙ Settings</button>
+    <?php if (!$_papyrIsMember && $_papyrInviteReady): ?>
+    <button type="button" onclick="papyrToggleNav(false); papyrOpenUnlock()">🔒 Unlock discussion</button>
+    <?php endif; ?>
+  </div>
 </nav>
 
 <?php include $_papyrEngine . '/templates/partials/theme-panel.php'; ?>
+<?php include_once $_papyrEngine . '/templates/partials/comments.php'; ?>
+
+<script>
+/* Mobile drawer — no-op on desktop, where the sidebar is always visible. */
+(function () {
+  var btn = document.getElementById('pn-burger');
+  window.papyrToggleNav = function (force) {
+    var open = typeof force === 'boolean' ? force : !document.body.classList.contains('pn-open');
+    document.body.classList.toggle('pn-open', open);
+    if (btn) { btn.setAttribute('aria-expanded', String(open)); btn.textContent = open ? '✕' : '☰'; }
+  };
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') papyrToggleNav(false); });
+}());
+</script>
 
 <script>
 /* GSAP enhancement — progressive: the CSS animation above handles it if GSAP
