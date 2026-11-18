@@ -29,6 +29,21 @@ Thumbs.db
 
 # Invite-only participant secret (see _papyr/bin/set-invite-pass.php)
 _papyr/config/invite.php
+plan/
 
 # Participant comments — site content written at runtime
 data/comments/
+
+# Dev scratch & editor files
+*.log
+*.code-workspace
+/_scratch/
+/o-index.php
+/github-ribbon.html
+
+# Local test content: not part of the public demo
+/plan/
+
+# Site media is content, not code: keep the folder, not the files
+/data/media/*
+!/data/media/.gitkeep
