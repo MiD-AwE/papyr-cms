@@ -1,0 +1,20 @@
+<?php declare(strict_types=1); ?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PapyrCMS- Site Map</title>
+  <meta name="description" content="Every page on this site as a live 3D map, read straight from the filesystem." />
+</head>
+<body>
+<?php
+/* Find nav.php by walking up — works at any directory depth. */
+for ($_d = __DIR__; !file_exists($_d . '/nav.php') && dirname($_d) !== $_d; $_d = dirname($_d));
+require_once $_d . '/nav.php';
+unset($_d);
+
+include $_papyrEngine . '/templates/partials/site-map.php';
+?>
+</body>
+</html>

@@ -73,14 +73,23 @@ function papyr_load_theme(string $pageFile, string $siteRoot): array
  * Keys must match save-theme.php's allowed list (HSL component names without --).
  * $defaults lets callers override the built-in n01z fallback values per-site.
  */
-function papyr_theme_css(array $theme, array $defaults = []): string
+/*
+ * Built-in component token values a page renders with when it has no saved
+ * theme. Mirrors the defaults in templates/cms/tokens.css.
+ */
+function papyr_theme_defaults(): array
 {
-    $keys = [
+    return [
         'accent-h'  => '194',  'accent-s'  => '100%', 'accent-l'  => '84%',
         'accent2-h' => '194',  'accent2-s' => '76%',  'accent2-l' => '50%',
         'bg-h'      => '205',  'bg-s'      => '71%',  'bg-l'      => '9%',
         'text-h'    => '255',  'text-s'    => '100%', 'text-l'    => '84%',
     ];
+}
+
+function papyr_theme_css(array $theme, array $defaults = []): string
+{
+    $keys   = papyr_theme_defaults();
     $merged = array_merge($keys, $defaults, $theme);
 
     $lines = [];

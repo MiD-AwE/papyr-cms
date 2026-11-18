@@ -133,6 +133,13 @@ lists more than one entry.
 - `NavBuilder::tree(array $pages): array` — builds a nested tree from flat manifest pages
 - Excludes drafts, sorts keys, nests by `/`-separated path segments
 - Read-only: does not build hrefs itself — callers (`nav.php`) combine `node['path']` with their own resolved base path
+- `tree($pages, includeDrafts: true)` keeps drafts (with a `draft` flag on each page node). Opt-in only — the nav never passes it; the admin's 3D site map does.
+
+### `_papyr/core/MapTree.php` + `templates/partials/site-map.php` + `assets/js/site-map.js`
+- Read-only 3D site map (step 1 of the 3D Mind Map → Papyr plan, 2026-11-18). `map.php` at the site root is a thin page: includes `nav.php`, then the partial.
+- `MapTree::fromNav($tree, $rootLabel, $themeFor)` reshapes a NavBuilder tree into one rooted graph (`{id, text, kind: root|dir|page, path, color, themed, draft, …, children}`). Index pages fold into their container (top-level `index.php` → root node, `docs/index.php` → Docs folder node). Theme lookup is injected, so core never reads theme files itself.
+- Node colour = the accent that page actually renders with (its saved theme, else `papyr_theme_defaults()` from load-theme.php). Drafts appear only when `$_papyrIsAdmin`.
+- Renderer uses vendored Three.js r128 (UMD, global `THREE`) + classic `OrbitControls` in `_papyr/assets/three/` — no CDN, no build step. `map.php#node=<relPath>` deep-links a selection.
 
 ### `_papyr/core/UrlResolver.php`
 - `UrlResolver::basePath(string $siteRoot): string` — the URL path prefix the site is currently served under, resolved **purely from the request environment** (diffs `SCRIPT_NAME` against `SCRIPT_FILENAME`'s path relative to the site root)
