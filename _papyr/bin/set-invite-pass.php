@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 /*
  * Set or rotate the shared invite password that unlocks participant
- * features (comments). Writes _papyr/config/invite.php with a fresh
+ * features (comments). Writes _config/invite.php with a fresh
  * password_hash(). Rotating it locks out everyone who unlocked with
  * the old password.
  *
  * Usage:
- *   php _papyr/bin/set-invite-pass.php
+ *   php _papyr/bin/set-invite-pass.php [--group=NAME]
  *   php _papyr/bin/set-invite-pass.php 'new-invite-password'
  */
 
@@ -21,8 +21,15 @@ if (PHP_SAPI !== 'cli') {
 require __DIR__ . '/../vendor/autoload.php';
 
 use Papyr\Core\MemberAuth;
+use Papyr\Core\SiteConfig;
 
-$password = $argv[1] ?? null;
+// Options: --group=NAME overrides web-server group detection.
+$group = null;
+$args  = [];
+foreach (array_slice($argv, 1) as $a) {
+    if (str_starts_with($a, '--group=')) { $group = substr($a, 8); } else { $args[] = $a; }
+}
+$password = $args[0] ?? null;
 
 if ($password === null) {
     fwrite(STDOUT, "New invite password: ");
@@ -43,11 +50,19 @@ if (strlen($password) < 8) {
 }
 
 try {
-    MemberAuth::writeSecretFile($password);
+    $r = MemberAuth::writeSecretFile($password, $group);
 } catch (\Throwable $e) {
     fwrite(STDERR, $e->getMessage() . "\n");
     exit(1);
 }
 
-fwrite(STDOUT, "Invite password saved to " . realpath(MemberAuth::secretFilePath()) . "\n");
+foreach ($r['notes'] as $n) { fwrite(STDOUT, "  - {$n}\n"); }
+fwrite(STDOUT, "Wrote {$r['path']}  (mode {$r['mode']}, group {$r['group']})\n");
+foreach ($r['warnings'] as $w) { fwrite(STDERR, "WARNING: {$w}\n"); }
+
+$legacy = SiteConfig::legacyDir() . '/invite.php';
+if (is_file($legacy)) {
+    fwrite(STDERR, "WARNING: a stale copy remains at {$legacy}. _config/ wins, but run migrate-config.php to clean it up.\n");
+}
+
 fwrite(STDOUT, "Anyone unlocked with a previous invite password is now locked out.\n");

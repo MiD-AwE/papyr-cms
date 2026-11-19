@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 /*
  * Admin password (re)set — the lockout escape hatch. Writes
- * _papyr/config/secret.php with a fresh password_hash(). Works over SSH
+ * _config/secret.php with a fresh password_hash(). Works over SSH
  * on any host, without touching the web server's environment variable
  * config — this is the fix for hosts where PAPYR_ADMIN_PASS never
  * reliably reaches PHP.
  *
  * Usage:
- *   php _papyr/bin/set-admin-pass.php
+ *   php _papyr/bin/set-admin-pass.php [--group=NAME]
  *   php _papyr/bin/set-admin-pass.php 'new-password'
  */
 
@@ -22,8 +22,15 @@ if (PHP_SAPI !== 'cli') {
 require __DIR__ . '/../vendor/autoload.php';
 
 use Papyr\Core\AdminAuth;
+use Papyr\Core\SiteConfig;
 
-$password = $argv[1] ?? null;
+// Options: --group=NAME overrides web-server group detection.
+$group = null;
+$args  = [];
+foreach (array_slice($argv, 1) as $a) {
+    if (str_starts_with($a, '--group=')) { $group = substr($a, 8); } else { $args[] = $a; }
+}
+$password = $args[0] ?? null;
 
 if ($password === null) {
     fwrite(STDOUT, "New admin password: ");
@@ -55,8 +62,21 @@ if (strlen($password) < 8) {
     exit(1);
 }
 
-AdminAuth::writeSecretFile($password);
+try {
+    $r = AdminAuth::writeSecretFile($password, $group);
+} catch (\Throwable $e) {
+    fwrite(STDERR, $e->getMessage() . "\n");
+    exit(1);
+}
 
-fwrite(STDOUT, "Wrote " . AdminAuth::secretFilePath() . " — admin login is ready.\n");
+foreach ($r['notes'] as $n) { fwrite(STDOUT, "  - {$n}\n"); }
+fwrite(STDOUT, "Wrote {$r['path']}  (mode {$r['mode']}, group {$r['group']})\n");
+foreach ($r['warnings'] as $w) { fwrite(STDERR, "WARNING: {$w}\n"); }
+
+$legacy = SiteConfig::legacyDir() . '/secret.php';
+if (is_file($legacy)) {
+    fwrite(STDERR, "WARNING: a stale copy remains at {$legacy}. _config/ wins, but run migrate-config.php to clean it up.\n");
+}
+
 fwrite(STDOUT, "Note: if PAPYR_ADMIN_PASS is also set in the environment, it takes\n");
 fwrite(STDOUT, "precedence over this file. Unset it if you want this password to apply.\n");

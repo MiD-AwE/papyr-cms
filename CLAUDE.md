@@ -174,7 +174,8 @@ lists more than one entry.
 - Loads `config/sites.json`, resolves relative site roots via `realpath()`, instantiates `$scanner` and `$ai`, sets timezone
 - No session handling here — auth is each endpoint's own concern (see below)
 
-### `_papyr/config/sites.json`
+### `_config/sites.json` (ADR-002 Phase B — was `_papyr/config/`)
+- Resolved by `SiteConfig::path()`: `_config/` first, legacy `_papyr/config/` per-file fallback. `bin/migrate-config.php` moves it. `SiteConfig::writeSecret()` is the only secret writer (0640 + web group).
 - `cms` block: name, version, manifest_path, scan_ttl_seconds, timezone
 - `ai` block: `local` (Ollama), `hermes` (openai_compat, port 7860), `cloud` (Cerebras) — API keys via `api_key_env` only, never hardcoded
 - `sites` block: currently one entry (`mid_awe`), root `".."`, `url` used only for the admin dashboard's external "visit site" link — **not** used for internal link-building (that's `UrlResolver`'s job)
@@ -215,7 +216,7 @@ flat-file ethos. `_papyr/login.php` resolves the admin secret through
 1. Env var `PAPYR_ADMIN_PASS` (checked via `getenv()`, `$_SERVER`, and `$_ENV`,
    first non-empty wins — shared hosts often populate only one of the three).
    Plaintext, compared with `hash_equals()`.
-2. Config file `_papyr/config/secret.php` (git-ignored, holds a
+2. Config file `_config/secret.php` (site-owned, git-ignored, mode 640 + web-server group; holds a
    `password_hash()` output) — the portable fallback for hosts that don't
    reliably surface env vars to PHP at all (the original motivation: a
    shared cPanel/LiteSpeed host silently never set the env var, which nearly
@@ -227,8 +228,8 @@ Env var wins when both are present. `php _papyr/bin/set-admin-pass.php` is
 the CLI lockout-recovery tool — writes `secret.php` over SSH without
 touching the web server's env config. The login form carries a CSRF token
 and is same-origin checked; on success `Session::grantAdmin()` regenerates
-the id and sets `$_SESSION['papyr_admin'] = true`. Logout via
-`login.php?action=logout` (`Session::destroy()`). `_papyr/config/secret.php.example` and
+the id and sets `$_SESSION['papyr_admin'] = true`. Logout is a POST to
+`login.php` (`action=logout` + CSRF, same-origin; GET does nothing) → `Session::destroy()`. `_papyr/config/secret.php.example` and
 `.htaccess.example` are the committed templates; the real files are
 git-ignored.
 

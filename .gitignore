@@ -1,6 +1,8 @@
 # Secrets — never commit. See *.example counterparts for the shape.
 .htaccess
 _papyr/config/secret.php
+/_config/secret.php
+/_config/invite.php
 .env
 .env.*
 !.env.example

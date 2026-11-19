@@ -12,15 +12,15 @@ if (!file_exists($autoload)) {
 require $autoload;
 
 /* ---- Config ---- */
-$configPath = __DIR__ . '/config/sites.json';
+$configPath = \Papyr\Core\SiteConfig::path('sites.json');   // _config/ first, legacy _papyr/config/ as fallback
 if (!file_exists($configPath)) {
     http_response_code(500);
-    exit('Papyr CMS: config/sites.json not found.');
+    exit('Papyr CMS: _config/sites.json not found (see _papyr/config/sites.json.example).');
 }
 $config = json_decode(file_get_contents($configPath), true);
 if (json_last_error() !== JSON_ERROR_NONE) {
     http_response_code(500);
-    exit('Papyr CMS: config/sites.json is not valid JSON.');
+    exit('Papyr CMS: _config/sites.json is not valid JSON.');
 }
 
 /* ---- Timezone ---- */
