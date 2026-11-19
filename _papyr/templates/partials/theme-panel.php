@@ -166,7 +166,11 @@ $_papyrSaveUrl = $_papyrBasePath . '/_papyr/api/save-theme.php';
     <div class="tp-access">
       <?php if ($_papyrIsAdmin ?? false): ?>
         <p class="tp-access-state">Signed in as admin. Discussion unlocked.</p>
-        <a class="tp-btn" href="<?= htmlspecialchars(($_papyrBasePath ?? '') . '/_papyr/login.php?action=logout', ENT_QUOTES, 'UTF-8') ?>">Log out</a>
+        <form method="POST" action="<?= htmlspecialchars(($_papyrBasePath ?? '') . '/_papyr/login.php', ENT_QUOTES, 'UTF-8') ?>">
+          <input type="hidden" name="action" value="logout">
+          <input type="hidden" name="csrf" value="<?= htmlspecialchars((string) ($_papyrCsrf ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+          <button type="submit" class="tp-btn">Log out</button>
+        </form>
       <?php elseif ($_papyrIsMember ?? false): ?>
         <p class="tp-access-state">🔓 Discussion unlocked</p>
         <button type="button" class="tp-btn" onclick="papyrLock()">Lock</button>

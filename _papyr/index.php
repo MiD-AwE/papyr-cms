@@ -322,7 +322,7 @@ $cms = $config['cms'] ?? [];
 <div class="wrap">
 
   <h1><?= h($cms['name'] ?? 'Papyr CMS') ?></h1>
-  <div class="sub">v<?= h($cms['version'] ?? '?') ?> · <a href="login.php?action=logout" style="color:var(--dim)">logout</a></div>
+  <div class="sub">v<?= h($cms['version'] ?? '?') ?> · <form method="POST" action="login.php" style="display:inline"><input type="hidden" name="action" value="logout"><input type="hidden" name="csrf" value="<?= h(Session::csrfToken()) ?>"><button type="submit" style="background:none;border:0;padding:0;font:inherit;color:var(--dim);cursor:pointer;text-decoration:underline">logout</button></form></div>
 
   <!-- ===== Stack health pills ===== -->
   <div class="row">
@@ -372,7 +372,7 @@ $cms = $config['cms'] ?? [];
       <?php if (!$sv['rootOk']): ?>
         <div class="err">
           Root directory not found. Update <code>sites.<?= h((string)$key) ?>.root</code> in
-          <code>config/sites.json</code>.
+          <code>_config/sites.json</code>.
         </div>
       <?php elseif ($sv['pagesErr']): ?>
         <div class="err">getPages error: <?= h($sv['pagesErr']) ?></div>

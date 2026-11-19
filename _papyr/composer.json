@@ -9,8 +9,11 @@
     "autoload": {
         "psr-4": {
             "Papyr\\Core\\": "core/",
-            "Papyr\\UI\\":   "ui/"
-        }
+            "Papyr\\UI\\": "ui/"
+        },
+        "classmap": [
+            "core/AIBridge.php"
+        ]
     },
     "config": {
         "optimize-autoloader": true

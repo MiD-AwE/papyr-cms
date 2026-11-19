@@ -12,11 +12,16 @@ use Papyr\Core\Session;
 
 Session::start();
 
-/* Logout */
-if (($_GET['action'] ?? '') === 'logout') {
-    Session::destroy();
-    header('Location: ' . _papyrSiteUrl());
-    exit;
+/* Logout — POST only, with CSRF + same-origin. A GET (a crafted <img>, a
+   prefetch, a link on another site) must never end someone's session. */
+if (($_POST['action'] ?? '') === 'logout' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (Session::sameOrigin() && Session::checkCsrf($_POST['csrf'] ?? null)) {
+        Session::destroy();
+        header('Location: ' . _papyrSiteUrl());
+        exit;
+    }
+    http_response_code(403);
+    exit('Logout refused: missing or invalid token. Go back, reload the page and try again.');
 }
 
 /* Already in — send to admin dashboard */
@@ -29,9 +34,18 @@ $error      = '';
 $configured = AdminAuth::source() !== null;
 
 if (!$configured) {
-    $error = 'Admin secret not configured. Run "php _papyr/bin/set-admin-pass.php", '
-        . 'or create _papyr/config/secret.php (see secret.php.example), '
-        . 'or set the PAPYR_ADMIN_PASS environment variable.';
+    /* Say *why* (missing vs. unreadable vs. broken) — the usual cause of a
+       "lockout" on a fresh host is file permissions, not a lost password. */
+    $error = match (AdminAuth::configState()) {
+        'unreadable' => 'The admin secret file exists but the web server cannot read it. '
+            . 'Make _config/secret.php readable by the web server\'s group (mode 640), '
+            . 'or re-run "php _papyr/bin/set-admin-pass.php".',
+        'invalid'    => 'The admin secret file is readable but does not contain a valid hash. '
+            . 'Re-run "php _papyr/bin/set-admin-pass.php".',
+        default      => 'Admin secret not configured: _config/secret.php is missing. '
+            . 'Run "php _papyr/bin/set-admin-pass.php", '
+            . 'or set the PAPYR_ADMIN_PASS environment variable.',
+    };
 } elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $submitted = $_POST['pass'] ?? '';
 
