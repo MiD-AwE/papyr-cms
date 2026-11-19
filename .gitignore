@@ -46,4 +46,4 @@ data/comments/
 
 # Site media is content, not code: keep the folder, not the files
 /data/media/*
-!/data/media/.gitkeep
+!/data/media/.gitkeep/_config/sites.json
