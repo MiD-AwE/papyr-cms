@@ -23,9 +23,9 @@ require __DIR__ . '/../vendor/autoload.php';
 
 use Papyr\Core\Comments;
 use Papyr\Core\MemberAuth;
+use Papyr\Core\Session;
 
-session_set_cookie_params(['httponly' => true, 'samesite' => 'Lax', 'path' => '/']);
-session_start();
+Session::start();
 
 header('Content-Type: application/json');
 header('X-Content-Type-Options: nosniff');
@@ -41,7 +41,7 @@ if (!MemberAuth::isMember()) {
     papyr_comments_fail(403, 'Unlock with your invite password to see and join the discussion.');
 }
 
-$isAdmin  = ($_SESSION['papyr_admin'] ?? false) === true;
+$isAdmin  = Session::isAdmin();
 $siteRoot = dirname(__DIR__, 2);
 $store    = new Comments($siteRoot);
 $method   = $_SERVER['REQUEST_METHOD'];
@@ -61,16 +61,13 @@ if ($method !== 'POST') {
 }
 
 /* ---------- write ---------- */
-$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-if ($origin !== '' && parse_url($origin, PHP_URL_HOST) !== parse_url('//' . ($_SERVER['HTTP_HOST'] ?? ''), PHP_URL_HOST)) {
-    papyr_comments_fail(403, 'Cross-origin request refused');
-}
+Session::requireSameOrigin();
 
 $body = json_decode((string) file_get_contents('php://input'), true);
 if (json_last_error() !== JSON_ERROR_NONE || !is_array($body)) {
     papyr_comments_fail(400, 'Invalid JSON body');
 }
-if (!MemberAuth::checkCsrf($body['csrf'] ?? null)) {
+if (!Session::checkCsrf($body['csrf'] ?? null)) {
     papyr_comments_fail(403, 'Your session expired. Reload the page and try again.');
 }
 

@@ -4,11 +4,16 @@ declare(strict_types=1);
 /* Auth gate — admin session required for the entire dashboard, including
    the POST handlers below. A POST can be sent directly without going
    through the UI, so this must run before any output or action handling. */
-session_start();
-if (!($_SESSION['papyr_admin'] ?? false)) {
+require __DIR__ . '/vendor/autoload.php';
+
+use Papyr\Core\Session;
+
+Session::start();
+if (!Session::isAdmin()) {
     header('Location: login.php');
     exit;
 }
+$csrf = Session::csrfToken();
 
 use Papyr\Core\NavBuilder;
 use Papyr\Core\PageWriter;
@@ -31,7 +36,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $formSiteKey = (string) ($_POST['site'] ?? '');
     $formPath    = trim((string) ($_POST['page_path'] ?? ''));
 
-    if (!isset($sites[$formSiteKey])) {
+    if (!Session::sameOrigin() || !Session::checkCsrf($_POST['csrf'] ?? null)) {
+        $postError = 'Your session expired. Reload the page and try again.';
+    } elseif (!isset($sites[$formSiteKey])) {
         $postError = 'Unknown site key.';
     } elseif ($formPath === '') {
         $postError = 'Page path is required.';
@@ -404,6 +411,7 @@ $cms = $config['cms'] ?? [];
                 <?php if (!empty($p['cms_managed'])): ?>
                   <form method="POST" style="display:inline"
                         onsubmit="return confirm('Delete <?= h(addslashes((string)$rel)) ?>?')">
+                    <input type="hidden" name="csrf"      value="<?= h($csrf) ?>">
                     <input type="hidden" name="action"    value="delete">
                     <input type="hidden" name="site"      value="<?= h((string)$key) ?>">
                     <input type="hidden" name="page_path" value="<?= h((string)$rel) ?>">
@@ -431,6 +439,7 @@ $cms = $config['cms'] ?? [];
         <details class="add-page-wrap">
           <summary>Add Page</summary>
           <form class="add-page-form" method="POST">
+            <input type="hidden" name="csrf"   value="<?= h($csrf) ?>">
             <input type="hidden" name="action" value="create">
             <input type="hidden" name="site"   value="<?= h((string)$key) ?>">
 
@@ -586,6 +595,7 @@ $cms = $config['cms'] ?? [];
       fd.append('task', this.dataset.task);
       fd.append('site', ctx.site);
       fd.append('path', ctx.path);
+      fd.append('csrf', <?= json_encode($csrf) ?>);
 
       fetch('api/ai.php', { method: 'POST', body: fd })
         .then(function (r) { return r.json(); })

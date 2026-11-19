@@ -10,15 +10,30 @@ declare(strict_types=1);
  *   local tasks  → raw file content (stays on-device)
  */
 
-/* Auth gate — admin session required. AI calls spend Cerebras credits and
-   are a cost-abuse vector left open, so this must reject before any task
-   runs, not just hide the panel in the UI. */
-session_start();
-if (!($_SESSION['papyr_admin'] ?? false)) {
+require_once __DIR__ . '/../vendor/autoload.php';
+
+use Papyr\Core\Session;
+
+/* Auth gate — admin session + POST + CSRF + same-origin. AI calls spend
+   Cerebras credits and are a cost-abuse vector left open, so this must
+   reject before any task runs, not just hide the panel in the UI. */
+Session::start();
+if (!Session::isAdmin()) {
     header('Content-Type: application/json');
     header('X-Content-Type-Options: nosniff');
     http_response_code(403);
     exit(json_encode(['ok' => false, 'error' => 'Forbidden']));
+}
+if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+    header('Content-Type: application/json');
+    http_response_code(405);
+    exit(json_encode(['ok' => false, 'error' => 'Method not allowed']));
+}
+Session::requireSameOrigin();
+if (!Session::checkCsrf($_POST['csrf'] ?? null)) {
+    header('Content-Type: application/json');
+    http_response_code(403);
+    exit(json_encode(['ok' => false, 'error' => 'Your session expired. Reload the page and try again.']));
 }
 
 require_once __DIR__ . '/../bootstrap.php';
@@ -35,9 +50,9 @@ function jsonOut(array $payload, int $status = 200): void
     exit;
 }
 
-$task    = (string) ($_POST['task']  ?? $_GET['task']  ?? '');
-$siteKey = (string) ($_POST['site']  ?? $_GET['site']  ?? '');
-$relPath = (string) ($_POST['path']  ?? $_GET['path']  ?? '');
+$task    = (string) ($_POST['task'] ?? '');
+$siteKey = (string) ($_POST['site'] ?? '');
+$relPath = (string) ($_POST['path'] ?? '');
 
 $cloudTasks = ['social_media_draft', 'meta_description', 'page_summary'];
 $localTasks = ['content_review'];

@@ -179,9 +179,18 @@ lists more than one entry.
 - `ai` block: `local` (Ollama), `hermes` (openai_compat, port 7860), `cloud` (Cerebras) — API keys via `api_key_env` only, never hardcoded
 - `sites` block: currently one entry (`mid_awe`), root `".."`, `url` used only for the admin dashboard's external "visit site" link — **not** used for internal link-building (that's `UrlResolver`'s job)
 
+### `_papyr/core/Session.php` (ADR-002 Phase A)
+- The **only** place that calls `session_start()`. `Session::start(?string $basePath)` — idempotent; session name `PAPYR_` + hash of the site root, cookie path = the site's base path, httponly, SameSite=Lax, Secure on HTTPS. Two installs on one host never share a session.
+- Identity is the site root only (the ADR sketched `siteKey|siteRoot`): login.php and the JSON endpoints skip bootstrap.php, so the root is the one value every entry point derives identically without config.
+- `isAdmin()`, `grantAdmin()` (regenerates id + rotates CSRF), `destroy()`; `csrfToken()` / `rotateCsrf()` / `checkCsrf()` (one token per session, key `papyr_csrf`); `sameOrigin()` / `requireSameOrigin()` (Origin, then Referer; hosts compared **without ports** via `hostOf()`).
+- If output already started, `start()` refuses and records where (`failure()`); `papyr_nav()` then `error_log()`s one warning naming the page. `MemberAuth::csrfToken()`/`checkCsrf()` are deprecated wrappers (0.2.x).
+
 ### `nav.php` (site root)
-- The site spine every content page includes. Wires the engine (`require _papyr/bootstrap.php` etc.), reads the admin session flag, computes `$_papyrBasePath` via `UrlResolver`, renders the nav tree and includes the theme panel partial
-- Sets `$_papyrIsAdmin` from `$_SESSION['papyr_admin']` — pages and partials downstream read this flag rather than re-checking the session themselves
+- The site spine every content page includes. Two halves:
+  - **Boot** (top level, prints nothing): engine requires, `Session::start()`, roles, `$_papyrBasePath` via `UrlResolver`, page key, theme, tree. Sets `$_papyrIsAdmin`, `$_papyrIsMember`, `$_papyrCsrf` — pages and partials read these rather than re-checking the session.
+  - **Render** — `papyr_nav()`: sidebar, drawer, theme panel, comments assets. Imports boot vars with an explicit `global` list (Phase C replaces this with `papyr()`).
+- Pages boot before output: `define('PAPYR_DEFER_NAV', true);` + walk-up `require_once` above `<!DOCTYPE>`, then `<?php papyr_nav(); ?>` after `<body>`. Without the define, the last line of nav.php renders immediately (legacy pages keep working, but only get a session while PHP is still buffering output).
+- Missing `_papyr/` → `error_log()` and return; `papyr_nav()` renders nothing (no fatal).
 
 ---
 
@@ -216,9 +225,10 @@ flat-file ethos. `_papyr/login.php` resolves the admin secret through
 
 Env var wins when both are present. `php _papyr/bin/set-admin-pass.php` is
 the CLI lockout-recovery tool — writes `secret.php` over SSH without
-touching the web server's env config. `session_regenerate_id(true)` on
-success, sets `$_SESSION['papyr_admin'] = true`. Logout via
-`login.php?action=logout`. `_papyr/config/secret.php.example` and
+touching the web server's env config. The login form carries a CSRF token
+and is same-origin checked; on success `Session::grantAdmin()` regenerates
+the id and sets `$_SESSION['papyr_admin'] = true`. Logout via
+`login.php?action=logout` (`Session::destroy()`). `_papyr/config/secret.php.example` and
 `.htaccess.example` are the committed templates; the real files are
 git-ignored.
 
@@ -230,10 +240,13 @@ requests — a POST can always be sent without going through the UI.
 **Gate status per endpoint:**
 | Endpoint | Gated? |
 |---|---|
-| `_papyr/api/save-theme.php` | ✅ session check, 403 JSON if absent |
+| `_papyr/api/save-theme.php` | ✅ admin + CSRF + same-origin, 403 JSON |
 | `_papyr/templates/partials/theme-panel.php` Commit button | ✅ hidden unless `$_papyrIsAdmin` (UX layer only — the real gate is save-theme.php) |
-| `_papyr/index.php` (dashboard + Add Page/Delete POST handlers) | ✅ session check, 302 to login.php if absent |
-| `_papyr/api/ai.php` | ✅ session check, 403 JSON if absent |
+| `_papyr/index.php` (dashboard + Add Page/Delete POST handlers) | ✅ admin (302 to login.php); POSTs also CSRF + same-origin |
+| `_papyr/api/ai.php` | ✅ admin + POST only + CSRF + same-origin, 403/405 JSON |
+| `_papyr/api/unlock.php` | ✅ same-origin + per-IP throttle (no CSRF: the invite password is the proof) |
+| `_papyr/api/comments.php` | ✅ member to read; writes add CSRF + same-origin; delete admin only |
+| `_papyr/login.php` | ✅ CSRF + same-origin on the login POST |
 
 ---
 

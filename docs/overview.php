@@ -1,4 +1,10 @@
-<?php declare(strict_types=1); ?>
+<?php declare(strict_types=1);
+/* Boot the Papyr spine before any output (session, roles, theme); the nav renders after <body>. */
+define('PAPYR_DEFER_NAV', true);
+for ($_d = __DIR__; !file_exists($_d . '/nav.php') && dirname($_d) !== $_d; $_d = dirname($_d));
+require_once $_d . '/nav.php';
+unset($_d);
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -8,12 +14,7 @@
   <meta name="description" content="PapyrCMS - A helpful but not in the way, refusing to invade or get too big for its britches, does exactly what you asked, nothing more CMS, finally." />
 </head>
 <body>
-<?php
-/* Find nav.php by walking up — works at any directory depth. */
-for ($_d = __DIR__; !file_exists($_d . '/nav.php') && dirname($_d) !== $_d; $_d = dirname($_d));
-require_once $_d . '/nav.php';
-unset($_d);
-?>
+<?php papyr_nav(); ?>
 <main class="page-content docs">
   <h1>PapyrCMS- overview</h1>
   <div class="body-content">P — Paper thin<br />  

@@ -7,7 +7,13 @@
   Rendered by PageWriter::write() into a PHP file.
   PHP blocks are passed through as literal text; Twig expressions are replaced.
 #}
-<?php declare(strict_types=1); ?>
+<?php declare(strict_types=1);
+/* Boot the Papyr spine before any output (session, roles, theme); the nav renders after <body>. */
+define('PAPYR_DEFER_NAV', true);
+for ($_d = __DIR__; !file_exists($_d . '/nav.php') && dirname($_d) !== $_d; $_d = dirname($_d));
+require_once $_d . '/nav.php';
+unset($_d);
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -17,12 +23,7 @@
   <meta name="description" content="{{ meta_description }}" />
 </head>
 <body>
-<?php
-/* Find nav.php by walking up — works at any directory depth. */
-for ($_d = __DIR__; !file_exists($_d . '/nav.php') && dirname($_d) !== $_d; $_d = dirname($_d));
-require_once $_d . '/nav.php';
-unset($_d);
-?>
+<?php papyr_nav(); ?>
 <main class="page-content {{ page_class|default('') }}">
   <h1>{{ title }}</h1>
   <div class="body-content">{{ body_content|raw }}</div>

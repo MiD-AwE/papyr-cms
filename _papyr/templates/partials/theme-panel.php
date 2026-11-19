@@ -210,6 +210,7 @@ $_papyrSaveUrl = $_papyrBasePath . '/_papyr/api/save-theme.php';
   var SAVE_URL = <?= json_encode($_papyrSaveUrl) ?>;
   var UNLOCK_URL = <?= json_encode($_papyrBasePath . '/_papyr/api/unlock.php') ?>;
   var PAGE_KEY = <?= json_encode($_papyrPageKey ?? '') ?>;
+  var CSRF     = <?= json_encode(($_papyrIsAdmin ?? false) ? ($_papyrCsrf ?? '') : '') ?>;
 
   /* ---- Token discovery ----
      Scans stylesheet :root rules for --*-h properties, then confirms the
@@ -426,7 +427,7 @@ $_papyrSaveUrl = $_papyrBasePath . '/_papyr/api/save-theme.php';
     fetch(SAVE_URL, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ page: pageKey, theme: theme })
+      body:    JSON.stringify({ page: pageKey, csrf: CSRF, theme: theme })
     })
       .then(function (r) { return r.json(); })
       .then(function (d) { if (d.ok) flashSaved(); else console.error('[papyr] save-theme:', d.error); })

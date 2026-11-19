@@ -25,7 +25,6 @@ class MemberAuth
     private const SESSION_FLAG = 'papyr_member';
     private const SESSION_VER  = 'papyr_member_ver';
     private const SESSION_NAME = 'papyr_member_name';
-    private const SESSION_CSRF = 'papyr_csrf';
 
     private const FREE_ATTEMPTS = 5;     // failures before lockout begins
     private const BASE_LOCK_SEC = 60;    // first lockout length, doubles after
@@ -84,7 +83,7 @@ class MemberAuth
     /** True when this session unlocked with the CURRENT invite secret. Admins count too. */
     public static function isMember(): bool
     {
-        if (($_SESSION['papyr_admin'] ?? false) === true) return true;
+        if (Session::isAdmin()) return true;
         if (($_SESSION[self::SESSION_FLAG] ?? false) !== true) return false;
         if (!self::configured()) return false;
         return hash_equals(self::fingerprint(), (string) ($_SESSION[self::SESSION_VER] ?? ''));
@@ -95,7 +94,7 @@ class MemberAuth
         session_regenerate_id(true);
         $_SESSION[self::SESSION_FLAG] = true;
         $_SESSION[self::SESSION_VER]  = self::fingerprint();
-        $_SESSION[self::SESSION_CSRF] = bin2hex(random_bytes(16));
+        Session::rotateCsrf();
     }
 
     public static function revoke(): void
@@ -103,18 +102,16 @@ class MemberAuth
         unset($_SESSION[self::SESSION_FLAG], $_SESSION[self::SESSION_VER], $_SESSION[self::SESSION_NAME]);
     }
 
+    /** @deprecated 0.2.x — use Session::csrfToken(). Kept one release for compatibility. */
     public static function csrfToken(): string
     {
-        if (empty($_SESSION[self::SESSION_CSRF])) {
-            $_SESSION[self::SESSION_CSRF] = bin2hex(random_bytes(16));
-        }
-        return (string) $_SESSION[self::SESSION_CSRF];
+        return Session::csrfToken();
     }
 
+    /** @deprecated 0.2.x — use Session::checkCsrf(). Kept one release for compatibility. */
     public static function checkCsrf(?string $token): bool
     {
-        $have = (string) ($_SESSION[self::SESSION_CSRF] ?? '');
-        return $have !== '' && is_string($token) && hash_equals($have, $token);
+        return Session::checkCsrf($token);
     }
 
     public static function displayName(): string

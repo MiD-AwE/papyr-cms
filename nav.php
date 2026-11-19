@@ -2,39 +2,47 @@
 declare(strict_types=1);
 
 /*
- * PapyrCMS site spine — include at the top of each page's <body>:
+ * PapyrCMS site spine. Two halves (ADR-002 Phase A):
  *
- *     <?php include __DIR__ . '/nav.php'; ?>  (from site root or subdirectory)
+ *   BOOT   — this file's top level. Engine requires, session, roles, page
+ *            key, theme lookup, nav tree. Prints nothing, so it can (and
+ *            should) run before any output:
+ *
+ *              <?php declare(strict_types=1);
+ *              define('PAPYR_DEFER_NAV', true);
+ *              for ($_d = __DIR__; !file_exists($_d . '/nav.php') && dirname($_d) !== $_d; $_d = dirname($_d));
+ *              require_once $_d . '/nav.php';
+ *              unset($_d);
+ *              ?>
+ *              <!DOCTYPE html> … <body>
+ *              <?php papyr_nav(); ?>
+ *
+ *   RENDER — papyr_nav(): sidebar, drawer, theme panel, comments assets.
+ *
+ * Older pages that include this file inside <body> without defining
+ * PAPYR_DEFER_NAV still work: the last line renders immediately. They only
+ * get a session while PHP is still buffering output (see papyr_nav()).
  *
  * The engine always lives at _papyr/ relative to this file's directory.
  */
 
+use Papyr\Core\MemberAuth;
+use Papyr\Core\NavBuilder;
+use Papyr\Core\Session;
+use Papyr\Core\UrlResolver;
+
 $_papyrEngine = __DIR__ . '/_papyr';
+$_papyrReady  = false;   // flips true once boot completes; papyr_nav() renders nothing until then
 if (!is_dir($_papyrEngine)) {
-    die('[PapyrCMS] Engine not found at _papyr/. Is it installed?');
+    // Degrade to plain PHP pages rather than a fatal: papyr_nav() is still
+    // defined (top-level functions bind at compile time) and renders nothing.
+    error_log('[PapyrCMS] Engine not found at ' . $_papyrEngine . ' — pages render without nav.');
+    return;
 }
 
 require_once $_papyrEngine . '/vendor/autoload.php';
 require_once $_papyrEngine . '/bootstrap.php';   // $sites, $scanner, $config
 require_once $_papyrEngine . '/api/load-theme.php';
-
-// Admin session — read existing session regardless of whether headers were already sent.
-// Pages that output HTML before including nav.php can't start a new session, but the
-// existing session cookie from the browser is still readable via @session_start().
-if (session_status() === PHP_SESSION_NONE) {
-    @session_start();
-}
-$_papyrIsAdmin = ($_SESSION['papyr_admin'] ?? false) === true;
-
-use Papyr\Core\MemberAuth;
-use Papyr\Core\NavBuilder;
-use Papyr\Core\UrlResolver;
-
-// Participant session — invite password unlocks comments (never admin rights).
-// Admins count as participants. See Papyr\Core\MemberAuth.
-$_papyrIsMember     = MemberAuth::isMember();
-$_papyrInviteReady  = MemberAuth::configured();
-$_papyrCsrf         = $_papyrIsMember ? MemberAuth::csrfToken() : '';
 
 // Single managed site
 $_papyrSiteKey  = (string) array_key_first($sites);
@@ -48,6 +56,18 @@ $_papyrLabel    = $_papyrSiteConf['label'] ?? ($config['cms']['name'] ?? 'Papyr 
 // and "" on a production vhost rooted at the site.
 $_papyrBasePath = UrlResolver::basePath($_papyrSiteRoot);
 $_papyrUrlBase  = $_papyrBasePath . '/';
+
+// Session — per-install name, cookie scoped to the base path. Must run
+// before output; if it can't, the visitor is treated as signed out and
+// papyr_nav() logs which page needs migrating to the boot-first pattern.
+Session::start($_papyrBasePath);
+$_papyrIsAdmin = Session::isAdmin();
+
+// Participant session — invite password unlocks comments (never admin rights).
+// Admins count as participants. See Papyr\Core\MemberAuth.
+$_papyrIsMember     = MemberAuth::isMember();
+$_papyrInviteReady  = MemberAuth::configured();
+$_papyrCsrf         = $_papyrIsMember ? Session::csrfToken() : '';
 
 // Live page tree (Scanner respects TTL; won't re-scan within scan_ttl_seconds)
 $_papyrPages = $scanner->getPages($_papyrSiteKey);
@@ -63,6 +83,8 @@ $_papyrActive = ltrim(
     str_replace($_papyrSiteRoot, '', realpath($_papyrPageFile) ?: ''),
     '/'
 );
+
+$_papyrReady = true;
 
 // Recursive renderer — outputs <li> elements into the <ul> below
 function papyrNavTree(array $nodes, string $active, int $depth = 0, string $urlBase = '/'): void
@@ -87,6 +109,28 @@ function papyrNavTree(array $nodes, string $active, int $depth = 0, string $urlB
         }
     }
 }
+/**
+ * Render half: sidebar, mobile drawer, theme panel, comments assets.
+ * Call once, right after <body>. Safe to call twice (second call is a no-op).
+ */
+function papyr_nav(): void
+{
+    static $rendered = false;
+    // Explicit imports from the boot half. Phase C replaces these with papyr().
+    global $_papyrReady, $_papyrEngine, $_papyrTheme, $_papyrUrlBase, $_papyrLabel,
+           $_papyrTree, $_papyrActive, $_papyrBasePath, $_papyrPageKey, $_papyrSiteRoot,
+           $_papyrIsAdmin, $_papyrIsMember, $_papyrInviteReady, $_papyrCsrf;
+
+    if ($rendered || !$_papyrReady) {
+        return;
+    }
+    $rendered = true;
+
+    if (!Session::active()) {
+        error_log('[PapyrCMS] No session on ' . ($_SERVER['SCRIPT_NAME'] ?? '?')
+            . ' (' . (Session::failure() ?? 'not started') . '). Admin and invite sign-ins'
+            . ' are ignored on this page — boot nav.php before output (see the top of nav.php).');
+    }
 ?>
 <style>
 /* Token defaults — canonical source (cascade: papyr_theme_css() overrides below) */
@@ -288,3 +332,8 @@ body {
   });
 }());
 </script>
+<?php
+}
+
+// Older pages (no PAPYR_DEFER_NAV) render where they include this file.
+if (!defined('PAPYR_DEFER_NAV')) { papyr_nav(); }

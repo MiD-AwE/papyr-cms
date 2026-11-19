@@ -1,6 +1,5 @@
 <?php
 declare(strict_types=1);
-session_start();
 
 /* Deliberately requires only the autoloader, not the full bootstrap.php
    chain (Scanner/AIBridge/sites.json parsing) — login must stay reachable
@@ -9,17 +8,19 @@ session_start();
 require __DIR__ . '/vendor/autoload.php';
 
 use Papyr\Core\AdminAuth;
+use Papyr\Core\Session;
+
+Session::start();
 
 /* Logout */
 if (($_GET['action'] ?? '') === 'logout') {
-    $_SESSION = [];
-    session_destroy();
+    Session::destroy();
     header('Location: ' . _papyrSiteUrl());
     exit;
 }
 
 /* Already in — send to admin dashboard */
-if ($_SESSION['papyr_admin'] ?? false) {
+if (Session::isAdmin()) {
     header('Location: ' . _papyrSiteUrl() . '_papyr/');
     exit;
 }
@@ -34,18 +35,27 @@ if (!$configured) {
 } elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $submitted = $_POST['pass'] ?? '';
 
-    if (!AdminAuth::verify($submitted)) {
+    if (!Session::sameOrigin() || !Session::checkCsrf($_POST['csrf'] ?? null)) {
+        $error = 'Your session expired. Please try again.';
+    } elseif (!is_string($submitted) || !AdminAuth::verify($submitted)) {
         $error = 'Incorrect password.';
     } else {
-        session_regenerate_id(true);
-        $_SESSION['papyr_admin'] = true;
-        /* Return to the page that linked here, or fall back to admin dashboard */
-        $ref = $_SERVER['HTTP_REFERER'] ?? '';
-        $safe = ($ref !== '' && parse_url($ref, PHP_URL_HOST) === $_SERVER['HTTP_HOST']);
-        header('Location: ' . ($safe ? $ref : _papyrSiteUrl() . '_papyr/'));
+        Session::grantAdmin();
+        /* Return to the page that linked here (carried through the form, since
+           the POST's own Referer is login.php), or fall back to the dashboard.
+           Hosts are compared without ports, so :88 dev installs work too. */
+        $ret  = (string) ($_POST['return'] ?? '');
+        $safe = $ret !== ''
+            && Session::hostOf($ret) !== ''
+            && Session::hostOf($ret) === Session::hostOf((string) ($_SERVER['HTTP_HOST'] ?? ''))
+            && !str_contains($ret, '/_papyr/login.php');
+        header('Location: ' . ($safe ? $ret : _papyrSiteUrl() . '_papyr/'));
         exit;
     }
 }
+
+/* Where to land after a successful login: the page that linked here. */
+$returnTo = (string) ($_POST['return'] ?? $_SERVER['HTTP_REFERER'] ?? '');
 
 /*
  * Derive the absolute site root URL from this file's location.
@@ -110,6 +120,8 @@ function _papyrSiteUrl(): string
   <p class="error"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></p>
   <?php endif; ?>
   <form method="POST">
+    <input type="hidden" name="csrf" value="<?= htmlspecialchars(Session::csrfToken(), ENT_QUOTES, 'UTF-8') ?>">
+    <input type="hidden" name="return" value="<?= htmlspecialchars($returnTo, ENT_QUOTES, 'UTF-8') ?>">
     <input type="password" name="pass" autofocus placeholder="Admin password" autocomplete="current-password">
     <button type="submit">Enter</button>
   </form>

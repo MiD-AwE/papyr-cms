@@ -1,4 +1,10 @@
-<?php declare(strict_types=1); ?>
+<?php declare(strict_types=1);
+/* Boot the Papyr spine before any output (session, roles, theme); the nav renders after <body>. */
+define('PAPYR_DEFER_NAV', true);
+for ($_d = __DIR__; !file_exists($_d . '/nav.php') && dirname($_d) !== $_d; $_d = dirname($_d));
+require_once $_d . '/nav.php';
+unset($_d);
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -12,10 +18,7 @@
 </head>
 <body>
 <?php
-/* Find nav.php by walking up — works at any directory depth. */
-for ($_d = __DIR__; !file_exists($_d . '/nav.php') && dirname($_d) !== $_d; $_d = dirname($_d));
-require_once $_d . '/nav.php';
-unset($_d);
+papyr_nav();
 
 $_swatches = papyr_swatches_enumerate($_papyrSiteRoot . '/data/swatches');
 ?>

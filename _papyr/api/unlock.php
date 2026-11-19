@@ -21,9 +21,9 @@ declare(strict_types=1);
 require __DIR__ . '/../vendor/autoload.php';
 
 use Papyr\Core\MemberAuth;
+use Papyr\Core\Session;
 
-session_set_cookie_params(['httponly' => true, 'samesite' => 'Lax', 'path' => '/']);
-session_start();
+Session::start();
 
 header('Content-Type: application/json');
 header('X-Content-Type-Options: nosniff');
@@ -39,11 +39,10 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     papyr_unlock_fail(405, 'Method not allowed');
 }
 
-/* Same-origin check — browsers always send Origin on cross-site fetch POSTs. */
-$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-if ($origin !== '' && parse_url($origin, PHP_URL_HOST) !== parse_url('//' . ($_SERVER['HTTP_HOST'] ?? ''), PHP_URL_HOST)) {
-    papyr_unlock_fail(403, 'Cross-origin request refused');
-}
+/* Same-origin check — browsers always send Origin on cross-site fetch POSTs.
+   No CSRF token here: an unlock is the step that *creates* the participant
+   session, and the password itself is the proof of intent. */
+Session::requireSameOrigin();
 
 $body = json_decode((string) file_get_contents('php://input'), true);
 if (json_last_error() !== JSON_ERROR_NONE || !is_array($body)) {
