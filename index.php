@@ -21,6 +21,7 @@ unset($_d);
 if (function_exists('papyr_nav')) { papyr_nav(); }
 $__base = isset($_papyrBasePath) ? htmlspecialchars($_papyrBasePath, ENT_QUOTES, 'UTF-8') : '';
 ?>
+<?php include __DIR__ . '/_partials/github-ribbon.html'; ?>
 
 <main class="pk">
 

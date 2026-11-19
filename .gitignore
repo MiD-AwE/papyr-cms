@@ -38,8 +38,6 @@ data/comments/
 *.log
 *.code-workspace
 /_scratch/
-/o-index.php
-/github-ribbon.html
 
 # Local test content: not part of the public demo
 /plan/
