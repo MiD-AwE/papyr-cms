@@ -74,7 +74,7 @@ $__base = isset($_papyrBasePath) ? htmlspecialchars($_papyrBasePath, ENT_QUOTES,
       </div>
 
       <div class="pk-hero-art">
-        <img src="<?= $__base ?>/assets/images/hero-laptop-bird.webp"
+        <img src="<?= $__base ?>/assets/img/hero-laptop-bird.webp"
              alt="The PapyrCMS admin dashboard on a laptop, beside the PapyrCMS origami bird"
              width="1536" height="1024" loading="eager" decoding="async" />
       </div>
