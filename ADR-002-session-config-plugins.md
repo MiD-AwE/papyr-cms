@@ -350,6 +350,64 @@ The card's action row (admin only, via `window.PAPYR.role`) calls `pages.php`. V
 see only title, Open page, and parent/child links; file metadata (modified time, origin,
 theme source) is shown to admin only.
 
+### 7.3 Amendment (2026-11-19) — starter layouts and typed theme values
+
+**Intent (Chuck):** every page made through Admin → Add Page should be able to start
+from the same building blocks as the demo's front page — hero, features, cards — and
+be born in its own colors, chosen with the HSL sliders or typed in exactly.
+
+**Starters, not one template.** `create` gains two arguments:
+
+| Arg | Values | Effect |
+|---|---|---|
+| `layout` | `landing` · `article` · `docs` · `blank` (+ site starters) | which starter Twig template PageWriter renders |
+| `theme` | optional `{ "accent-h": "149", "accent-s": "57%", … }` | written to `data/themes/{pageKey}.json` in the same request |
+
+- Each starter = `{name}/page.html.twig` + `starter.json` (label, description, field list
+  — same field-manifest idea as the blog design in `DESIGN-json-driven-blog.md`).
+  Add Page renders the form from the manifest; PageWriter injects the fields.
+- **Sections are reusable partials — used at generation time only.** Extract the landing
+  page's bands (hero, features, cards, CTA) into `_papyr/templates/sections/*.twig`. A
+  starter is a list of sections; improving a section improves every *future* page made
+  from it. Sections are rendered once, when PageWriter writes the file; the output is
+  plain PHP/HTML with no Twig at request time. The demo's `index.php` stays a hand-made
+  page (the sections are extracted *from* it, not rendered *into* it), so removing
+  `_papyr/` still leaves the homepage working (§8).
+- **One theme writer.** Before Phase E, move the theme write out of `save-theme.php` into
+  a core `ThemeStore::write(string $pageKey, array $values)`; `save-theme.php` and
+  `pages.php` both call it.
+- **Two template roots.** `TemplateEngine`'s loader gains `{siteRoot}/_templates/` ahead
+  of `_papyr/templates/` (site wins on a name clash); `normalize()` already derives from
+  the configured roots.
+- **Ownership:** engine starters in `_papyr/templates/starters/` (replaced on upgrade);
+  site starters in `{siteRoot}/_templates/starters/` (site-owned, `_`-prefixed, survives
+  upgrades; wins on name collision). SAL example: a "research page" starter.
+- Starter output is a normal page file: `cms_managed: true`, hand-editable afterwards,
+  no runtime dependency on the starter.
+- `guardPath()` unchanged; the theme write reuses the existing theme-save code path
+  (no second writer).
+
+**Theme at creation.** Add Page embeds the same HSL slider component as the theme panel
+(one component, two hosts — do not fork it), defaulting to the site default theme.
+
+**Typed values — in Add Page and in the theme panel.** Each color group gets a text field
+beside its sliders. Accepted input:
+
+- `149 57% 43%` · `149, 57%, 43%` · `hsl(149 57% 43%)` · `hsl(149, 57%, 43%)`
+- `#2fae6b` · `#2a6` (converted to H/S/L)
+
+Invalid input leaves the sliders untouched and shows a short inline message; valid input
+moves the sliders live (same ephemeral user-tier behavior as dragging). Clamp H 0–360,
+S/L 0–100%.
+
+**Acceptance (added to §8 for Phase E):**
+- [ ] Add Page → Landing creates a page with hero/features/cards, in the chosen colors,
+      visible in the nav and on the map after the response (no reload).
+- [ ] A site starter in `_templates/starters/` appears in Add Page and survives replacing `_papyr/`.
+- [ ] Typing `hsl(149 57% 43%)` and its hex equivalent produce the same slider positions
+      (±1 for rounding). Typed values only move color groups the panel discovered on the page.
+- [ ] Removing the starter folder later does not break pages created from it.
+
 ---
 
 ## 8. Acceptance checks (run after every phase)
