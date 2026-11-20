@@ -23,21 +23,24 @@ declare(strict_types=1);
  *     triplets (e.g. --accent-h, --accent-s, --accent-l). The panel
  *     discovers them automatically; unknown triplets get auto-labeled.
  *   - api/save-theme.php must be reachable. The URL is built from
- *     $_papyrBasePath, the same request-derived base path nav.php computes
- *     via UrlResolver — this partial does not re-derive it independently.
+ *     the base path from the request context (papyr()->basePath, computed
+ *     once by nav.php via UrlResolver) — this partial does not re-derive it.
  */
 
-// Reuse the base path nav.php already resolved (the normal include path).
-// If this partial is ever included standalone, fall back to resolving it
-// here via the same UrlResolver so the two never disagree.
-if (!isset($_papyrBasePath)) {
-    $_papyrFallbackRoot = realpath(__DIR__ . '/../../..');
-    $_papyrBasePath = $_papyrFallbackRoot !== false
-        ? \Papyr\Core\UrlResolver::basePath($_papyrFallbackRoot)
-        : '';
-    unset($_papyrFallbackRoot);
-}
-$_papyrSaveUrl = $_papyrBasePath . '/_papyr/api/save-theme.php';
+// All request state comes from the one read-only context (nav.php's boot
+// half registers it) — never from variables in the including file's scope,
+// which are invisible whenever nav.php was booted inside a function.
+// Included standalone (no boot), the context is an inert visitor and the
+// base path falls back to the same UrlResolver nav.php uses.
+$_tp = \Papyr\Core\Context::current();
+$_tpBase = $_tp->ready ? $_tp->basePath : (function (): string {
+    $root = realpath(__DIR__ . '/../../..');
+    return $root !== false ? \Papyr\Core\UrlResolver::basePath($root) : '';
+})();
+$_tpAdmin  = $_tp->isAdmin();
+$_tpMember = $_tp->isMember();
+$_tpLogin  = htmlspecialchars($_tpBase . '/_papyr/login.php', ENT_QUOTES, 'UTF-8');
+$_papyrSaveUrl = $_tpBase . '/_papyr/api/save-theme.php';
 ?>
 <style>
 /* ---- PapyrCMS theme panel ---- */   
@@ -161,34 +164,34 @@ $_papyrSaveUrl = $_papyrBasePath . '/_papyr/api/save-theme.php';
   <div class="tp-pad">
     <button type="button" class="tp-close" onclick="toggleThemePanel()" aria-label="Close settings">✕</button>
 
-    <?php if (($_papyrInviteReady ?? false) || ($_papyrIsAdmin ?? false)): ?>
     <h4>Access</h4>
     <div class="tp-access">
-      <?php if ($_papyrIsAdmin ?? false): ?>
+      <?php if ($_tpAdmin): ?>
         <p class="tp-access-state">Signed in as admin. Discussion unlocked.</p>
-        <form method="POST" action="<?= htmlspecialchars(($_papyrBasePath ?? '') . '/_papyr/login.php', ENT_QUOTES, 'UTF-8') ?>">
+        <form method="POST" action="<?= $_tpLogin ?>">
           <input type="hidden" name="action" value="logout">
-          <input type="hidden" name="csrf" value="<?= htmlspecialchars((string) ($_papyrCsrf ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+          <input type="hidden" name="csrf" value="<?= htmlspecialchars($_tp->csrf, ENT_QUOTES, 'UTF-8') ?>">
           <button type="submit" class="tp-btn">Log out</button>
         </form>
-      <?php elseif ($_papyrIsMember ?? false): ?>
-        <p class="tp-access-state">🔓 Discussion unlocked</p>
-        <button type="button" class="tp-btn" onclick="papyrLock()">Lock</button>
       <?php else: ?>
-        <form onsubmit="return papyrUnlock(event)" autocomplete="off">
-          <label for="tp-invite" class="tp-access-state">🔒 Invite password</label>
-          <div class="tp-access-row">
-            <input id="tp-invite" type="password" required maxlength="200" autocomplete="current-password">
-            <button type="submit" class="tp-btn">Unlock</button>
-          </div>
-        </form>
-      <?php endif; ?>
-      <?php if (!($_papyrIsAdmin ?? false)): ?>
-        <a class="tp-admin-link" href="<?= htmlspecialchars(($_papyrBasePath ?? '') . '/_papyr/login.php', ENT_QUOTES, 'UTF-8') ?>">Site admin? Log in</a>
+        <?php if ($_tpMember): ?>
+          <p class="tp-access-state">🔓 Discussion unlocked</p>
+          <button type="button" class="tp-btn" onclick="papyrLock()">Lock</button>
+        <?php elseif ($_tp->inviteReady): ?>
+          <form onsubmit="return papyrUnlock(event)" autocomplete="off">
+            <label for="tp-invite" class="tp-access-state">🔒 Invite password</label>
+            <div class="tp-access-row">
+              <input id="tp-invite" type="password" required maxlength="200" autocomplete="current-password">
+              <button type="submit" class="tp-btn">Unlock</button>
+            </div>
+          </form>
+        <?php endif; ?>
+        <?php /* Always offered to signed-out visitors — the admin login must stay
+                 reachable even when no invite password is configured. */ ?>
+        <a class="tp-admin-link" href="<?= $_tpLogin ?>">Site admin? Log in</a>
       <?php endif; ?>
       <p id="tp-access-msg" class="tp-access-msg" role="status"></p>
     </div>
-    <?php endif; ?>
 
     <h4>Palette</h4>
     <div class="tp-mode">
@@ -198,7 +201,7 @@ $_papyrSaveUrl = $_papyrBasePath . '/_papyr/api/save-theme.php';
     <div id="tp-token-groups"></div>
     <div class="tp-controls">
       <button class="tp-btn" onclick="resetTheme()">Reset</button>
-      <?php if ($_papyrIsAdmin ?? false) : ?>
+      <?php if ($_tpAdmin) : ?>
       <button class="tp-btn" onclick="saveTheme()">Commit</button>
       <?php endif; ?>
     </div>
@@ -212,9 +215,9 @@ $_papyrSaveUrl = $_papyrBasePath . '/_papyr/api/save-theme.php';
   var ROOT     = document.documentElement;
   var PANEL    = document.getElementById('theme-panel');
   var SAVE_URL = <?= json_encode($_papyrSaveUrl) ?>;
-  var UNLOCK_URL = <?= json_encode($_papyrBasePath . '/_papyr/api/unlock.php') ?>;
-  var PAGE_KEY = <?= json_encode($_papyrPageKey ?? '') ?>;
-  var CSRF     = <?= json_encode(($_papyrIsAdmin ?? false) ? ($_papyrCsrf ?? '') : '') ?>;
+  var UNLOCK_URL = <?= json_encode($_tpBase . '/_papyr/api/unlock.php') ?>;
+  var PAGE_KEY = <?= json_encode($_tp->pageKey) ?>;
+  var CSRF     = <?= json_encode($_tpAdmin ? $_tp->csrf : '') ?>;
 
   /* ---- Token discovery ----
      Scans stylesheet :root rules for --*-h properties, then confirms the

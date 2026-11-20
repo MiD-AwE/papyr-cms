@@ -26,6 +26,7 @@ declare(strict_types=1);
  * The engine always lives at _papyr/ relative to this file's directory.
  */
 
+use Papyr\Core\Context;
 use Papyr\Core\MemberAuth;
 use Papyr\Core\NavBuilder;
 use Papyr\Core\Session;
@@ -84,6 +85,25 @@ $_papyrActive = ltrim(
     '/'
 );
 
+// One read-only context for the render half and every partial. The $_papyr*
+// variables above stay as deprecated aliases (0.2.x), but nothing in the
+// engine reads them any more — they are only visible when this file was
+// required at file scope, and Context is not.
+Context::boot(new Context(
+    ready:       true,
+    engineDir:   $_papyrEngine,
+    siteRoot:    $_papyrSiteRoot,
+    basePath:    $_papyrBasePath,
+    label:       $_papyrLabel,
+    pageKey:     (string) $_papyrPageKey,
+    activePath:  $_papyrActive,
+    role:        $_papyrIsAdmin ? 'admin' : ($_papyrIsMember ? 'member' : 'visitor'),
+    csrf:        $_papyrCsrf,
+    inviteReady: $_papyrInviteReady,
+    theme:       $_papyrTheme,
+    tree:        $_papyrTree,
+));
+
 $_papyrReady = true;
 
 // Recursive renderer — outputs <li> elements into the <ul> below
@@ -109,6 +129,12 @@ function papyrNavTree(array $nodes, string $active, int $depth = 0, string $urlB
         }
     }
 }
+/** The read-only request context (ADR-002 Phase C). Safe to call from any scope. */
+function papyr(): Context
+{
+    return Context::current();
+}
+
 /**
  * Render half: sidebar, mobile drawer, theme panel, comments assets.
  * Call once, right after <body>. Safe to call twice (second call is a no-op).
@@ -116,15 +142,21 @@ function papyrNavTree(array $nodes, string $active, int $depth = 0, string $urlB
 function papyr_nav(): void
 {
     static $rendered = false;
-    // Explicit imports from the boot half. Phase C replaces these with papyr().
-    global $_papyrReady, $_papyrEngine, $_papyrTheme, $_papyrUrlBase, $_papyrLabel,
-           $_papyrTree, $_papyrActive, $_papyrBasePath, $_papyrPageKey, $_papyrSiteRoot,
-           $_papyrIsAdmin, $_papyrIsMember, $_papyrInviteReady, $_papyrCsrf;
-
-    if ($rendered || !$_papyrReady) {
+    if (!class_exists(Context::class)) {   // engine folder missing → plain pages, no nav, no fatal
+        return;
+    }
+    $p = Context::current();
+    if ($rendered || !$p->ready) {
         return;
     }
     $rendered = true;
+
+    // Local names for the template below. Read from the context, never from
+    // globals, so this works however nav.php was required.
+    $_papyrEngine = $p->engineDir;       $_papyrTheme   = $p->theme;
+    $_papyrUrlBase = $p->url();           $_papyrLabel   = $p->label;
+    $_papyrTree   = $p->tree;            $_papyrActive  = $p->activePath;
+    $_papyrIsMember = $p->isMember();    $_papyrInviteReady = $p->inviteReady;
 
     if (!Session::active()) {
         error_log('[PapyrCMS] No session on ' . ($_SERVER['SCRIPT_NAME'] ?? '?')

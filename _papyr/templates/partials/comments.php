@@ -14,8 +14,8 @@ declare(strict_types=1);
  * thread HTML is never sent to them. Unlocked participants see the thread
  * and a reply form. Admins also get Remove buttons.
  *
- * Reads from nav.php's scope: $_papyrSiteRoot, $_papyrBasePath,
- * $_papyrPageKey, $_papyrIsMember, $_papyrIsAdmin, $_papyrCsrf.
+ * Reads request state from the read-only Papyr\Core\Context (papyr()), not
+ * from variables in the caller's scope.
  */
 
 use Papyr\Core\Comments;
@@ -25,8 +25,14 @@ if (!function_exists('papyr_comments')) {
 
     function papyr_comments(string $block): void
     {
-        global $_papyrSiteRoot, $_papyrBasePath, $_papyrPageKey,
-               $_papyrIsMember, $_papyrIsAdmin, $_papyrCsrf, $_papyrInviteReady;
+        $p                 = \Papyr\Core\Context::current();
+        $_papyrSiteRoot    = $p->siteRoot;
+        $_papyrBasePath    = $p->basePath;
+        $_papyrPageKey     = $p->pageKey;
+        $_papyrIsMember    = $p->isMember();
+        $_papyrIsAdmin     = $p->isAdmin();
+        $_papyrCsrf        = $p->csrf;
+        $_papyrInviteReady = $p->inviteReady;
 
         if (!Comments::validKey($block) || !Comments::validKey((string) $_papyrPageKey)) {
             return;
