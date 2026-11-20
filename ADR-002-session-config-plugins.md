@@ -461,3 +461,31 @@ S/L 0–100%.
 - [ ] `_papyr/` is replaceable as a whole folder; nothing a site owns lives inside it.
 - [ ] Every write is behind a server-side gate: role + CSRF + same-origin.
 - [ ] No build step, no Node runtime, no CDN dependency for core features.
+
+---
+
+## Status — Phase A–C done (2026-11-20)
+
+| Phase | Commit(s) | Notes |
+|---|---|---|
+| A — Session & CSRF | `0dfcb7a` | Session identity is the site root only (not `siteKey|siteRoot`): login.php and the JSON endpoints skip bootstrap, so the root is the one value every entry point derives without config. |
+| B — `_config/` | `22633b6`, `a23d990`, `0b1c288` | Secrets resolve per file (`_config/` wins, legacy fallback), written `0640` + web-server group. Logout became a POST. `AIBridge.php` added to the classmap (several classes in one file). |
+| C — `papyr()` / `window.PAPYR` | `175cab3` + Phase C commit | See deviations below. |
+
+Deviations from §5 (CLAUDE.md wins; flagged here so the ADR stays truthful):
+
+- `$p->ai` reports whether a provider is **configured**, not whether it answers a ping —
+  `AIBridge::status()` makes network calls, too slow for every page render. The dashboard
+  still pings.
+- `$p->asset()`, `$p->provide()`, `$p->providers()` are deferred to Phase D, where plugins
+  and hooks exist to use them.
+- The context holds **no filesystem paths** (§5.1 "never exposed" taken literally), so
+  `site` has no root/engine dir; partials that need one derive it (`__DIR__`,
+  `Session::siteRoot()`).
+- An interim flat Context (`175cab3`) briefly exposed `theme` (saved values) and `tree`
+  (nested); the §5.1 groups of the same names replace them. The other flat names stay as
+  deprecated aliases for 0.2.x.
+- Context uses `readonly` properties → PHP 8.1+ (Twig 3 already required 8.1).
+- The site-map partial still reads the deprecated `$_papyr*` globals; it moves onto
+  `papyr()` with the plugin move in Phase D.
+

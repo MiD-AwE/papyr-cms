@@ -295,6 +295,19 @@ class AIBridge
         return $this->cloud->complete($prompt, ['max_tokens' => 80, 'temperature' => 0.5]);
     }
 
+    /**
+     * Which channels have a provider configured — no network calls, so it is
+     * cheap enough for every page render (papyr()->ai). status() pings.
+     * @return array{local: bool, cloud: bool}
+     */
+    public function configured(): array
+    {
+        return [
+            'local' => !($this->local instanceof NullProvider),
+            'cloud' => !($this->cloud instanceof NullProvider),
+        ];
+    }
+
     public function status(): array
     {
         return [

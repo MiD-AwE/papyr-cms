@@ -25,35 +25,30 @@ if (!function_exists('papyr_comments')) {
 
     function papyr_comments(string $block): void
     {
-        $p                 = \Papyr\Core\Context::current();
-        $_papyrSiteRoot    = $p->siteRoot;
-        $_papyrBasePath    = $p->basePath;
-        $_papyrPageKey     = $p->pageKey;
-        $_papyrIsMember    = $p->isMember();
-        $_papyrIsAdmin     = $p->isAdmin();
-        $_papyrCsrf        = $p->csrf;
-        $_papyrInviteReady = $p->inviteReady;
+        $p       = \Papyr\Core\Context::current();
+        $pageKey = $p->page['key'];
+        $isAdmin = $p->isAdmin();
 
-        if (!Comments::validKey($block) || !Comments::validKey((string) $_papyrPageKey)) {
+        if (!Comments::validKey($block) || !Comments::validKey($pageKey)) {
             return;
         }
 
         static $assetsSent = false;
         if (!$assetsSent) {
-            papyr_comments_assets((string) $_papyrBasePath, (string) $_papyrPageKey, (string) $_papyrCsrf);
+            papyr_comments_assets();
             $assetsSent = true;
         }
 
-        $store = new Comments((string) $_papyrSiteRoot);
+        $store = new Comments(\Papyr\Core\Session::siteRoot());
         $h     = fn(string $s): string => htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
 
         /* ---------- locked: count only ---------- */
-        if (!$_papyrIsMember) {
-            $n = $store->counts((string) $_papyrPageKey)[$block] ?? 0;
+        if (!$p->isMember()) {
+            $n = $store->counts($pageKey)[$block] ?? 0;
             $label = $n > 0
                 ? $n . ' comment' . ($n === 1 ? '' : 's') . ' · Unlock to read…'
                 : 'Join the discussion · Unlock to comment…';
-            if (!$_papyrInviteReady) {
+            if (!$p->site['invites']) {
                 // Invitations not set up yet: show the count, offer no unlock.
                 if ($n > 0) {
                     echo '<div class="pc-thread pc-locked"><span aria-hidden="true">💬</span> '
@@ -67,7 +62,7 @@ if (!function_exists('papyr_comments')) {
         }
 
         /* ---------- unlocked: thread + form ---------- */
-        $thread = $store->thread((string) $_papyrPageKey, $block);
+        $thread = $store->thread($pageKey, $block);
         $n      = count($thread);
         $shown  = 3; // newest N visible; older behind "See earlier"
 
@@ -83,7 +78,7 @@ if (!function_exists('papyr_comments')) {
         echo '<ol class="pc-list">';
         foreach ($thread as $i => $c) {
             $hidden = ($n > $shown && $i < $n - $shown) ? ' hidden' : '';
-            echo papyr_comment_html($c, (bool) $_papyrIsAdmin, $hidden);
+            echo papyr_comment_html($c, $isAdmin, $hidden);
         }
         echo '</ol>';
 
@@ -111,13 +106,9 @@ if (!function_exists('papyr_comments')) {
     }
 
     /* Styles + script, sent once per page on the first papyr_comments() call. */
-    function papyr_comments_assets(string $basePath, string $pageKey, string $csrf): void
+    /* Endpoint, page key and CSRF token come from window.PAPYR (nav.php). */
+    function papyr_comments_assets(): void
     {
-        $cfg = json_encode([
-            'api'  => $basePath . '/_papyr/api/comments.php',
-            'page' => $pageKey,
-            'csrf' => $csrf,
-        ], JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP);
         ?>
 <style>
 .pc-thread { margin-top: 1rem; padding-top: .8rem; border-top: 1px dashed var(--border-bright); font-size: .92rem; }
@@ -149,7 +140,8 @@ if (!function_exists('papyr_comments')) {
 <script>
 (function () {
   'use strict';
-  var CFG = <?= $cfg ?>;
+  var P   = window.PAPYR || { pageKey: '', csrf: '', api: {} };
+  var CFG = { api: P.api.comments, page: P.pageKey, csrf: P.csrf };
 
   function plural(n) { return n ? n + ' comment' + (n === 1 ? '' : 's') : 'Start the discussion'; }
 

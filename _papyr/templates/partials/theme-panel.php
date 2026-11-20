@@ -27,20 +27,19 @@ declare(strict_types=1);
  *     once by nav.php via UrlResolver) — this partial does not re-derive it.
  */
 
-// All request state comes from the one read-only context (nav.php's boot
-// half registers it) — never from variables in the including file's scope,
-// which are invisible whenever nav.php was booted inside a function.
-// Included standalone (no boot), the context is an inert visitor and the
-// base path falls back to the same UrlResolver nav.php uses.
+// All request state comes from the one read-only context: papyr() on the
+// server, window.PAPYR in the browser (both registered by nav.php). Never
+// from variables in the including file's scope.
+// Included standalone (no nav.php boot), the context is an inert visitor and
+// a minimal window.PAPYR is emitted below with a request-derived base path.
 $_tp = \Papyr\Core\Context::current();
-$_tpBase = $_tp->ready ? $_tp->basePath : (function (): string {
+$_tpBase = $_tp->ready ? $_tp->site['basePath'] : (function (): string {
     $root = realpath(__DIR__ . '/../../..');
     return $root !== false ? \Papyr\Core\UrlResolver::basePath($root) : '';
 })();
 $_tpAdmin  = $_tp->isAdmin();
 $_tpMember = $_tp->isMember();
 $_tpLogin  = htmlspecialchars($_tpBase . '/_papyr/login.php', ENT_QUOTES, 'UTF-8');
-$_papyrSaveUrl = $_tpBase . '/_papyr/api/save-theme.php';
 ?>
 <style>
 /* ---- PapyrCMS theme panel ---- */   
@@ -170,14 +169,14 @@ $_papyrSaveUrl = $_tpBase . '/_papyr/api/save-theme.php';
         <p class="tp-access-state">Signed in as admin. Discussion unlocked.</p>
         <form method="POST" action="<?= $_tpLogin ?>">
           <input type="hidden" name="action" value="logout">
-          <input type="hidden" name="csrf" value="<?= htmlspecialchars($_tp->csrf, ENT_QUOTES, 'UTF-8') ?>">
+          <input type="hidden" name="csrf" value="<?= htmlspecialchars($_tp->user['csrf'], ENT_QUOTES, 'UTF-8') ?>">
           <button type="submit" class="tp-btn">Log out</button>
         </form>
       <?php else: ?>
         <?php if ($_tpMember): ?>
           <p class="tp-access-state">🔓 Discussion unlocked</p>
           <button type="button" class="tp-btn" onclick="papyrLock()">Lock</button>
-        <?php elseif ($_tp->inviteReady): ?>
+        <?php elseif ($_tp->site['invites']): ?>
           <form onsubmit="return papyrUnlock(event)" autocomplete="off">
             <label for="tp-invite" class="tp-access-state">🔒 Invite password</label>
             <div class="tp-access-row">
@@ -208,16 +207,27 @@ $_papyrSaveUrl = $_tpBase . '/_papyr/api/save-theme.php';
   </div>
 </div>
 
+<?php if (!$_tp->ready): ?>
+<script>
+window.PAPYR = window.PAPYR || Object.freeze(<?= json_encode(
+    ['basePath' => $_tpBase, 'pageKey' => '', 'role' => 'visitor', 'csrf' => '',
+     'api' => ['theme' => $_tpBase . '/_papyr/api/save-theme.php', 'unlock' => $_tpBase . '/_papyr/api/unlock.php',
+               'comments' => $_tpBase . '/_papyr/api/comments.php', 'pages' => $_tpBase . '/_papyr/api/pages.php']],
+    JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
+</script>
+<?php endif; ?>
 <script>
 (function () {
   'use strict';
 
   var ROOT     = document.documentElement;
   var PANEL    = document.getElementById('theme-panel');
-  var SAVE_URL = <?= json_encode($_papyrSaveUrl) ?>;
-  var UNLOCK_URL = <?= json_encode($_tpBase . '/_papyr/api/unlock.php') ?>;
-  var PAGE_KEY = <?= json_encode($_tp->pageKey) ?>;
-  var CSRF     = <?= json_encode($_tpAdmin ? $_tp->csrf : '') ?>;
+  // Endpoints, page key and CSRF token come from window.PAPYR (nav.php).
+  var P        = window.PAPYR || { basePath: '', pageKey: '', role: 'visitor', csrf: '', api: {} };
+  var SAVE_URL   = P.api.theme;
+  var UNLOCK_URL = P.api.unlock;
+  var PAGE_KEY = P.pageKey;
+  var CSRF     = P.role === 'admin' ? P.csrf : '';
 
   /* ---- Token discovery ----
      Scans stylesheet :root rules for --*-h properties, then confirms the

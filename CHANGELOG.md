@@ -13,9 +13,25 @@
   when it is not allowed to set the group.
 - Login page says whether the admin secret file is **missing**, **unreadable** or **invalid**.
 - `_papyr/config/sites.json.example`.
+- **`papyr()` request context** (ADR-002 Phase C): one read-only `Papyr\Core\Context` with
+  `site`, `page`, `tree`, `user`, `theme`, `ai` groups; works from any scope. Drafts only for admin;
+  no secrets or filesystem paths.
+- **`window.PAPYR`** — `{basePath, pageKey, role, csrf, api}`, emitted once per page; the theme panel
+  and comments read it instead of building their own config.
+- `AIBridge::configured()` — which channels have a provider, without network calls.
+- `_papyr/tests/panel-test.php` — HTTP test of the panel, context and cookie path.
 
 ### Changed
 - **Logout is a POST** with CSRF + same-origin (theme panel, dashboard, `login.php`). `GET login.php?action=logout` no longer logs anyone out.
+- Theme panel: the Access section always renders; signed-out visitors always get "Site admin? Log in".
+- PHP 8.1+ (Twig 3 already required it).
+
+### Deprecated
+- `$_papyr*` globals and Context's flat properties (`basePath`, `label`, `pageKey`, `activePath`,
+  `role`, `csrf`, `inviteReady`) — use `papyr()`. Removed in 0.3.
+
+### Fixed
+- Theme panel and comments showed an admin as signed out when nav.php was required inside a function.
 - `core/AIBridge.php` is registered in Composer's classmap: it declares several classes, which PSR-4 cannot map.
 
 ## 0.1.x

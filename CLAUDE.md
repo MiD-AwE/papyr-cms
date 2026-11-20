@@ -189,7 +189,13 @@ lists more than one entry.
 ### `nav.php` (site root)
 - The site spine every content page includes. Two halves:
   - **Boot** (top level, prints nothing): engine requires, `Session::start()`, roles, `$_papyrBasePath` via `UrlResolver`, page key, theme, tree. Sets `$_papyrIsAdmin`, `$_papyrIsMember`, `$_papyrCsrf` — pages and partials read these rather than re-checking the session.
-  - **Render** — `papyr_nav()`: sidebar, drawer, theme panel, comments assets. Imports boot vars with an explicit `global` list (Phase C replaces this with `papyr()`).
+  - **Render** — `papyr_nav()`: emits `window.PAPYR`, then sidebar, drawer, theme panel, comments assets. Reads only `papyr()` — no `global`.
+- **Request context (ADR-002 Phase C):** boot registers one read-only `Papyr\Core\Context`; `papyr()` returns it from any scope (it works even when nav.php is required inside a function, which globals did not).
+  - Groups (§5.1): `site` (key, label, basePath, url, engineVersion, invites), `page` (key, path, title, draft, cmsManaged, modified, theme{values, source}), `tree` (pages, nested — drafts only for admin), `user` (role, displayName, csrf — `''` for visitors), `theme` (tokens, defaults, swatches), `ai` (local/cloud: a provider is *configured* — no pings on page render; the dashboard's `status()` pings). Methods: `isAdmin()`, `isMember()`, `url()`, `api()`, `browser()`.
+  - Never holds secrets, hashes, filesystem paths, AI hosts/models, or raw session data. Partials needing a path derive it themselves (`__DIR__`, `Session::siteRoot()`).
+  - `window.PAPYR` (§5.2) = `{basePath, pageKey, role, csrf, api:{theme, unlock, comments, pages}}`, frozen, emitted once by `papyr_nav()`. Theme panel and comments JS read it; `api.pages` points at Phase E's endpoint (not built yet).
+  - **Deprecated (0.2.x, remove in 0.3):** the `$_papyr*` globals (still set at file scope for old pages and the site-map partial, which moves in Phase D) and Context's flat properties `basePath`, `label`, `pageKey`, `activePath`, `role`, `csrf`, `inviteReady`. New code uses `papyr()` groups.
+- Test: `php _papyr/tests/panel-test.php` — throw-away subfolder site over HTTP; panel per role, `window.PAPYR`, context groups, drafts, read-only, cookie path.
 - Pages boot before output: `define('PAPYR_DEFER_NAV', true);` + walk-up `require_once` above `<!DOCTYPE>`, then `<?php papyr_nav(); ?>` after `<body>`. Without the define, the last line of nav.php renders immediately (legacy pages keep working, but only get a session while PHP is still buffering output).
 - Missing `_papyr/` → `error_log()` and return; `papyr_nav()` renders nothing (no fatal).
 
@@ -234,7 +240,7 @@ the id and sets `$_SESSION['papyr_admin'] = true`. Logout is a POST to
 git-ignored.
 
 **The boundary is server-side, always.** Hiding a UI control (e.g. the theme
-panel's Commit button, already gated on `$_papyrIsAdmin` in theme-panel.php)
+panel's Commit button, shown only when `papyr()->isAdmin()` in theme-panel.php)
 is UX, not security. Every gated endpoint independently rejects unauthenticated
 requests — a POST can always be sent without going through the UI.
 
@@ -242,7 +248,7 @@ requests — a POST can always be sent without going through the UI.
 | Endpoint | Gated? |
 |---|---|
 | `_papyr/api/save-theme.php` | ✅ admin + CSRF + same-origin, 403 JSON |
-| `_papyr/templates/partials/theme-panel.php` Commit button | ✅ hidden unless `$_papyrIsAdmin` (UX layer only — the real gate is save-theme.php) |
+| `_papyr/templates/partials/theme-panel.php` Commit button | ✅ hidden unless `papyr()->isAdmin()` (UX layer only — the real gate is save-theme.php) |
 | `_papyr/index.php` (dashboard + Add Page/Delete POST handlers) | ✅ admin (302 to login.php); POSTs also CSRF + same-origin |
 | `_papyr/api/ai.php` | ✅ admin + POST only + CSRF + same-origin, 403/405 JSON |
 | `_papyr/api/unlock.php` | ✅ same-origin + per-IP throttle (no CSRF: the invite password is the proof) |
@@ -254,7 +260,7 @@ requests — a POST can always be sent without going through the UI.
 ## Coding Conventions
 
 ### PHP
-- PHP 8.0+ syntax. Use typed properties, `match`, named arguments where they
+- PHP 8.1+ (Twig 3 already requires it; `Context` uses `readonly`). Use typed properties, `match`, named arguments where they
   add clarity.
 - Declare `strict_types=1` at the top of every file.
 - Namespace everything under `Papyr\Core` (core classes). `Papyr\UI` is

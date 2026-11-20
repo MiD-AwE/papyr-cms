@@ -31,6 +31,7 @@ use Papyr\Core\MemberAuth;
 use Papyr\Core\NavBuilder;
 use Papyr\Core\Session;
 use Papyr\Core\UrlResolver;
+use Papyr\Core\Version;
 
 $_papyrEngine = __DIR__ . '/_papyr';
 $_papyrReady  = false;   // flips true once boot completes; papyr_nav() renders nothing until then
@@ -62,47 +63,74 @@ $_papyrUrlBase  = $_papyrBasePath . '/';
 // before output; if it can't, the visitor is treated as signed out and
 // papyr_nav() logs which page needs migrating to the boot-first pattern.
 Session::start($_papyrBasePath);
+
+// Roles. Participants unlock comments with the invite password (never admin
+// rights); admins count as participants. See Papyr\Core\MemberAuth.
 $_papyrIsAdmin = Session::isAdmin();
+$_papyrIsMember = MemberAuth::isMember();
+$_papyrRole     = $_papyrIsAdmin ? 'admin' : ($_papyrIsMember ? 'member' : 'visitor');
 
-// Participant session — invite password unlocks comments (never admin rights).
-// Admins count as participants. See Papyr\Core\MemberAuth.
-$_papyrIsMember     = MemberAuth::isMember();
-$_papyrInviteReady  = MemberAuth::configured();
-$_papyrCsrf         = $_papyrIsMember ? Session::csrfToken() : '';
+// Live page tree (Scanner respects TTL; won't re-scan within scan_ttl_seconds).
+// $_papyrPages is the raw manifest (drafts included) for server-side use; the
+// context only carries drafts when the viewer is admin.
+$_papyrPages     = $scanner->getPages($_papyrSiteKey);
+$_papyrCtxPages  = $_papyrIsAdmin ? $_papyrPages : array_filter($_papyrPages, fn($pg) => empty($pg['draft']));
 
-// Live page tree (Scanner respects TTL; won't re-scan within scan_ttl_seconds)
-$_papyrPages = $scanner->getPages($_papyrSiteKey);
-$_papyrTree  = NavBuilder::tree($_papyrPages);
-
-// Server-inject saved theme into :root — eliminates flash of default colors
+// This page: key (shared by themes and comments), path, saved theme.
 $_papyrPageFile = $_SERVER['SCRIPT_FILENAME'] ?? __FILE__;
-$_papyrTheme    = papyr_load_theme($_papyrPageFile, $_papyrSiteRoot);
-$_papyrPageKey  = papyr_page_key($_papyrPageFile, $_papyrSiteRoot);   // same key themes and comments use
+$_papyrPageKey  = papyr_page_key($_papyrPageFile, $_papyrSiteRoot);
+$_papyrActive   = ltrim(str_replace($_papyrSiteRoot, '', realpath($_papyrPageFile) ?: ''), '/');
+$_papyrTheme    = papyr_load_theme($_papyrPageFile, $_papyrSiteRoot);   // saved values, [] if none
+$_papyrPageRow  = $_papyrPages[$_papyrActive] ?? [];
 
-// Active path (relative to site root) for active-link highlighting
-$_papyrActive = ltrim(
-    str_replace($_papyrSiteRoot, '', realpath($_papyrPageFile) ?: ''),
-    '/'
-);
-
-// One read-only context for the render half and every partial. The $_papyr*
-// variables above stay as deprecated aliases (0.2.x), but nothing in the
-// engine reads them any more — they are only visible when this file was
-// required at file scope, and Context is not.
+// One read-only context (ADR-002 §5.1). Everything that renders reads this
+// through papyr(); it works however this file was required.
 Context::boot(new Context(
-    ready:       true,
-    engineDir:   $_papyrEngine,
-    siteRoot:    $_papyrSiteRoot,
-    basePath:    $_papyrBasePath,
-    label:       $_papyrLabel,
-    pageKey:     (string) $_papyrPageKey,
-    activePath:  $_papyrActive,
-    role:        $_papyrIsAdmin ? 'admin' : ($_papyrIsMember ? 'member' : 'visitor'),
-    csrf:        $_papyrCsrf,
-    inviteReady: $_papyrInviteReady,
-    theme:       $_papyrTheme,
-    tree:        $_papyrTree,
+    ready: true,
+    site: [
+        'key'           => $_papyrSiteKey,
+        'label'         => (string) $_papyrLabel,
+        'basePath'      => $_papyrBasePath,
+        'url'           => (string) ($_papyrSiteConf['url'] ?? ''),
+        'engineVersion' => Version::ENGINE,
+        'invites'       => MemberAuth::configured(),
+    ],
+    page: [
+        'key'        => (string) $_papyrPageKey,
+        'path'       => $_papyrActive,
+        'title'      => (string) ($_papyrPageRow['title'] ?? ''),
+        'draft'      => !empty($_papyrPageRow['draft']),
+        'cmsManaged' => !empty($_papyrPageRow['cms_managed']),
+        'modified'   => (int) ($_papyrPageRow['mtime'] ?? 0),
+        'theme'      => [
+            'values' => array_merge(papyr_theme_defaults(), $_papyrTheme),
+            'source' => $_papyrTheme === [] ? 'default' : 'page',
+        ],
+    ],
+    tree: [
+        'pages'  => $_papyrCtxPages,
+        'nested' => NavBuilder::tree($_papyrCtxPages, includeDrafts: $_papyrIsAdmin),
+    ],
+    user: [
+        'role'        => $_papyrRole,
+        'displayName' => $_papyrIsMember ? MemberAuth::displayName() : '',
+        'csrf'        => $_papyrIsMember ? Session::csrfToken() : '',
+    ],
+    theme: [
+        'tokens'   => array_keys(papyr_theme_defaults()),
+        'defaults' => papyr_theme_defaults(),
+        'swatches' => papyr_swatches_enumerate($_papyrSiteRoot . '/data/swatches'),
+    ],
+    ai: $ai->configured(),
 ));
+unset($_papyrCtxPages, $_papyrPageRow);
+
+// DEPRECATED aliases (0.2.x, removed in 0.3) for pages and partials written
+// before papyr(). Populated from the context; only visible when this file
+// was required at file scope. New code: papyr().
+$_papyrCsrf        = papyr()->user['csrf'];
+$_papyrInviteReady = papyr()->site['invites'];
+$_papyrTree        = NavBuilder::tree($_papyrPages);   // nav tree, drafts never shown
 
 $_papyrReady = true;
 
@@ -151,12 +179,16 @@ function papyr_nav(): void
     }
     $rendered = true;
 
-    // Local names for the template below. Read from the context, never from
+    // Local names for the template below — read from the context, never from
     // globals, so this works however nav.php was required.
-    $_papyrEngine = $p->engineDir;       $_papyrTheme   = $p->theme;
-    $_papyrUrlBase = $p->url();           $_papyrLabel   = $p->label;
-    $_papyrTree   = $p->tree;            $_papyrActive  = $p->activePath;
-    $_papyrIsMember = $p->isMember();    $_papyrInviteReady = $p->inviteReady;
+    $_papyrEngine      = __DIR__ . '/_papyr';
+    $_papyrTheme       = $p->page['theme']['values'];
+    $_papyrUrlBase     = $p->url();
+    $_papyrLabel       = $p->site['label'];
+    $_papyrTree        = NavBuilder::tree($p->tree['pages']);   // sidebar never lists drafts
+    $_papyrActive      = $p->page['path'];
+    $_papyrIsMember    = $p->isMember();
+    $_papyrInviteReady = $p->site['invites'];
 
     if (!Session::active()) {
         error_log('[PapyrCMS] No session on ' . ($_SERVER['SCRIPT_NAME'] ?? '?')
@@ -164,6 +196,14 @@ function papyr_nav(): void
             . ' are ignored on this page — boot nav.php before output (see the top of nav.php).');
     }
 ?>
+<script>
+/* Papyr browser context (ADR-002 §5.2). Read-only: the theme panel, comments
+   and plugins read this instead of building their own config objects. */
+window.PAPYR = Object.freeze(<?= json_encode(
+    $p->browser(), JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+) ?>);
+Object.freeze(window.PAPYR.api);
+</script>
 <style>
 /* Token defaults — canonical source (cascade: papyr_theme_css() overrides below) */
 <?php echo file_get_contents($_papyrEngine . '/templates/cms/tokens.css'); ?>

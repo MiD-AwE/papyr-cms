@@ -17,6 +17,9 @@ declare(strict_types=1);
  *   - visitors never see Commit, and always get "Site admin? Log in",
  *     whether or not an invite password is configured
  *   - the session cookie path is the site base path, never /_papyr
+ *   - window.PAPYR (§5.2) carries role, CSRF and endpoints; no filesystem paths
+ *   - papyr() (§5.1): groups present, drafts only for admin, read-only,
+ *     deprecated flat aliases mirror the groups, no filesystem paths
  */
 
 if (PHP_SAPI !== 'cli') { exit('CLI only.'); }
@@ -64,6 +67,10 @@ function http(string $url, string $cookie = '', ?array $post = null): array {
     return [$status, $hdr, $body];
 }
 
+function papyrJs(string $html): array {
+    return preg_match('/window\.PAPYR = Object\.freeze\((\{.*?\})\);/s', $html, $m) ? (array) json_decode($m[1], true) : [];
+}
+
 /* ---------- build the throw-away site ---------- */
 $tmp  = sys_get_temp_dir() . '/papyr-test-' . bin2hex(random_bytes(4));
 $base = 't-site';
@@ -81,6 +88,16 @@ $page = fn(string $boot) => "<?php declare(strict_types=1);\ndefine('PAPYR_DEFER
     . "<!DOCTYPE html><html><head><title>t</title></head><body>\n<?php papyr_nav(); ?>\n</body></html>\n";
 file_put_contents("$site/plain.php", $page("require_once __DIR__ . '/nav.php';"));
 file_put_contents("$site/scoped.php", str_replace('</body>', "<?php papyr_comments('demo'); ?>\n</body>", $page("function boot_in_scope(): void { require_once __DIR__ . '/nav.php'; }\nboot_in_scope();")));
+
+file_put_contents("$site/ctx.php", "<?php declare(strict_types=1);\ndefine('PAPYR_DEFER_NAV', true);\nrequire_once __DIR__ . '/nav.php';\n"
+    . "\$p = papyr(); \$ro = 'writable';\n"
+    . "try { (function () use (\$p) { \$p->user = []; })(); } catch (\\Error \$e) { \$ro = 'readonly'; }\n"
+    . "header('Content-Type: application/json');\n"
+    . "echo json_encode(['site' => \$p->site, 'page' => \$p->page, 'pages' => array_keys(\$p->tree['pages']),\n"
+    . "  'nested' => \$p->tree['nested'], 'user' => \$p->user, 'theme' => \$p->theme, 'ai' => \$p->ai, 'ro' => \$ro,\n"
+    . "  'aliases' => \$p->basePath === \$p->site['basePath'] && \$p->role === \$p->user['role'] && \$p->csrf === \$p->user['csrf']\n"
+    . "     && \$p->pageKey === \$p->page['key'] && \$p->label === \$p->site['label'] && \$p->inviteReady === \$p->site['invites']]);\n");
+file_put_contents("$site/secret-draft.php", "<!-- papyr:draft -->\n<html><head><title>Hidden draft</title></head><body></body></html>\n");
 
 $grp = (string) (posix_getgrgid(posix_getegid())['name'] ?? '');
 $cli = fn(string $tool, string $pw) => shell_exec(escapeshellarg(PHP_BINARY) . " $site/_papyr/bin/$tool " . escapeshellarg($pw)
@@ -108,6 +125,24 @@ try {
     check('no unlock form without an invite password', !str_contains($html, 'id="tp-invite"'));
     check('Reset still there', str_contains($html, 'resetTheme()'));
     preg_match('/^(PAPYR_\w+)=[^;]+;.*?path=([^;]*)/mi', $hd['set-cookie'] ?? '', $m);
+    $wp = papyrJs($html);
+    check('window.PAPYR.role is visitor, csrf empty', ($wp['role'] ?? '') === 'visitor' && ($wp['csrf'] ?? null) === '');
+
+    [, , $json] = http("$U/ctx.php");
+    $cx = (array) json_decode($json, true);
+    echo "context (visitor)\n";
+    check('all §5.1 groups present', isset($cx['site'], $cx['page'], $cx['user'], $cx['theme'], $cx['ai'], $cx['pages']));
+    check('site group', ($cx['site']['basePath'] ?? '') === "/$base" && ($cx['site']['engineVersion'] ?? '') !== '');
+    check('page group', ($cx['page']['key'] ?? '') === 'ctx' && ($cx['page']['path'] ?? '') === 'ctx.php'
+        && in_array($cx['page']['theme']['source'] ?? '', ['page', 'default'], true));
+    check('user group: visitor, no csrf', ($cx['user']['role'] ?? '') === 'visitor' && ($cx['user']['csrf'] ?? null) === '');
+    check('theme group: tokens, defaults, swatches', !empty($cx['theme']['tokens']) && !empty($cx['theme']['defaults']) && isset($cx['theme']['swatches']));
+    check('ai group is two booleans', is_bool($cx['ai']['local'] ?? null) && is_bool($cx['ai']['cloud'] ?? null));
+    check('drafts hidden from visitors', !in_array('secret-draft.php', $cx['pages'] ?? [], true) && !str_contains($json, 'Hidden draft'));
+    check('context is read-only', ($cx['ro'] ?? '') === 'readonly');
+    check('deprecated flat aliases mirror the groups', ($cx['aliases'] ?? false) === true);
+    check('no filesystem path in the context', !str_contains($json, $tmp));
+    echo "visitor (invite not configured), continued\n";
     check('visitor session cookie path is the site base path', ($m[2] ?? '') === "/$base", 'got ' . ($m[2] ?? 'none'));
 
     /* ---------- login ---------- */
@@ -135,8 +170,22 @@ try {
         check('Log out form carries a CSRF token', (bool) preg_match('/name="action" value="logout">\s*<input type="hidden" name="csrf" value="[0-9a-f]{32}"/', $html));
         check('no "Site admin? Log in" link when signed in', !str_contains($html, 'Site admin? Log in'));
         check('comments partial sees the admin too', $file !== 'scoped.php' || str_contains($html, 'pc-thread') && !str_contains($html, 'pc-locked'));
-        check('JS gets the CSRF token for Commit', (bool) preg_match('/var CSRF\s*=\s*"[0-9a-f]{32}"/', $html));
+        $wp = papyrJs($html);
+        check('window.PAPYR emitted once', substr_count($html, 'window.PAPYR = Object.freeze(') === 1);
+        check('window.PAPYR.role is admin', ($wp['role'] ?? '') === 'admin');
+        check('window.PAPYR.csrf is the session token', (bool) preg_match('/^[0-9a-f]{32}$/', (string) ($wp['csrf'] ?? '')));
+        check('window.PAPYR.pageKey is this page', ($wp['pageKey'] ?? '') === basename($file, '.php'));
+        check('window.PAPYR.api.theme under the base path', ($wp['api']['theme'] ?? '') === "/$base/_papyr/api/save-theme.php");
+        check('theme panel reads endpoints from window.PAPYR', str_contains($html, 'var SAVE_URL   = P.api.theme'));
+        check('no filesystem path in window.PAPYR', !str_contains(json_encode($wp), $tmp));
     }
+
+    echo "context (admin)\n";
+    [, , $json] = http("$U/ctx.php", $cookie);
+    $cx = (array) json_decode($json, true);
+    check('user group: admin with csrf', ($cx['user']['role'] ?? '') === 'admin' && strlen((string) ($cx['user']['csrf'] ?? '')) === 32);
+    check('drafts included for admin', in_array('secret-draft.php', $cx['pages'] ?? [], true));
+    check('no filesystem path in the admin context', !str_contains($json, $tmp));
 
     /* ---------- visitor with an invite password configured ---------- */
     $cli('set-invite-pass.php', 'test-invite-pass');
