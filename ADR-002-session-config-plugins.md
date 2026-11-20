@@ -432,6 +432,9 @@ S/L 0–100%.
   the map (Draco + load-when-near), theme cascade with background-effect tokens,
   AI node expansion through `AIBridge` (JSON output), mind maps as a stored content type
   (`data/mindmaps/`, library view, `link` between maps), private-map storage.
+- Site default theme — edited only in the admin dashboard (`/_papyr/`), using the shared
+  HSL component; stored in `data/themes/_site.json`; lookup order page → site → engine.
+  The page theme panel's Commit stays page-only.
 - Multi-site from one engine install.
 - Plugin-owned write endpoints.
 - TokenRegistry scope fix (still open from CLAUDE.md; independent).
