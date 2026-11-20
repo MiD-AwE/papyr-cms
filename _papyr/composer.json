@@ -3,7 +3,7 @@
     "description": "Paper-thin flat-file CMS — filesystem is truth, manual edits always safe",
     "type": "project",
     "require": {
-        "php": ">=8.0",
+        "php": ">=8.1",
         "twig/twig": "^3.0"
     },
     "autoload": {
