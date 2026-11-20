@@ -20,7 +20,10 @@ unset($_d);
 <?php
 papyr_nav();
 
-$_swatches = papyr_swatches_enumerate($_papyrSiteRoot . '/data/swatches');
+// Engine-optional: without _papyr/ the swatch gallery is simply empty (ADR-002 §8).
+$_swatches = function_exists('papyr_swatches_enumerate')
+    ? papyr_swatches_enumerate(__DIR__ . '/data/swatches')
+    : [];
 ?>
 <main class="page-content about">
   <h1 class="visually-hidden">PapyrCMS — Paper thin And Per Your Request</h1>
@@ -274,8 +277,8 @@ $_swatches = papyr_swatches_enumerate($_papyrSiteRoot . '/data/swatches');
 
 <!-- Progressive enhancement: load GSAP only if present in /assets/.
      If it fails to load, the no-JS fallback below reveals everything. -->
-<script src="<?= htmlspecialchars($_papyrBasePath, ENT_QUOTES, 'UTF-8') ?>/assets/gsap/gsap.min.js"></script>
-<script src="<?= htmlspecialchars($_papyrBasePath, ENT_QUOTES, 'UTF-8') ?>/assets/gsap/ScrollTrigger.min.js"></script>
+<script src="<?= htmlspecialchars($_papyrBasePath ?? '', ENT_QUOTES, 'UTF-8') ?>/assets/gsap/gsap.min.js"></script>
+<script src="<?= htmlspecialchars($_papyrBasePath ?? '', ENT_QUOTES, 'UTF-8') ?>/assets/gsap/ScrollTrigger.min.js"></script>
 <script>
 (function () {
   var reduce = window.matchMedia &&
