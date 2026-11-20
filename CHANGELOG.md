@@ -20,11 +20,23 @@
   and comments read it instead of building their own config.
 - `AIBridge::configured()` — which channels have a provider, without network calls.
 - `_papyr/tests/panel-test.php` — HTTP test of the panel, context and cookie path.
+- **Plugins** (ADR-002 Phase D): `Papyr\Core\Plugins` loader with `plugin.json` manifests
+  (name, `requires.papyr`, entry), `{siteRoot}/_plugins/` overriding `_papyr/plugins/`,
+  `papyr_plugin('name', $options)` to render, `sites.json` → `"plugins"` for boot-only plugins.
+- Context hooks: `asset()`, `provide()`, `providers()`, plus `pageTheme()`.
+- **`map.nodes`** provider hook: `MapTree::attach()` puts plugin-supplied nodes on the site map with
+  fixed status colours; private nodes reach admin only.
+- `_papyr/tests/plugins-test.php` (shared harness in `tests/lib.php`).
 
 ### Changed
 - **Logout is a POST** with CSRF + same-origin (theme panel, dashboard, `login.php`). `GET login.php?action=logout` no longer logs anyone out.
 - Theme panel: the Access section always renders; signed-out visitors always get "Site admin? Log in".
 - PHP 8.1+ (Twig 3 already required it).
+
+- **The 3D site map is a core plugin**: `_papyr/plugins/site-map/` (was `templates/partials/site-map.php`
+  + `assets/js` + `assets/three`). `map.php` is now `papyr_plugin('site-map')`. Same map, same data.
+- Plugin entries refuse direct HTTP requests (404) and plugin folders ship an `.htaccess` denying `.php`/`.json`.
+- `about.php` renders without `_papyr/`.
 
 ### Deprecated
 - `$_papyr*` globals and Context's flat properties (`basePath`, `label`, `pageKey`, `activePath`,

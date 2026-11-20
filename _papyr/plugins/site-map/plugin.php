@@ -2,54 +2,62 @@
 declare(strict_types=1);
 
 /*
- * PapyrCMS 3D site map — read-only view of the live page tree.
+ * site-map — core plugin (ADR-002 Phase D). Live, read-only 3D map of the
+ * page tree. A page opts in by calling:
  *
- * Include from a site page AFTER nav.php, which provides the scope this
- * partial reads: $_papyrPages, $_papyrIsAdmin, $_papyrSiteRoot,
- * $_papyrLabel, $_papyrBasePath, $_papyrEngine.
+ *     <?php papyr_plugin('site-map'); ?>
  *
- *     <?php include $_papyrEngine . '/templates/partials/site-map.php'; ?>
+ * Runs in the loader's isolated scope with $p (the read-only context),
+ * $options and $plugin. Nothing here writes to disk; the graph is derived
+ * per request from the Scanner's pages, so it can never drift from the
+ * filesystem. Drafts come only from $p->tree, which carries them for the
+ * signed-in admin alone.
  *
- * Nothing here writes to disk. The graph is derived per request from the
- * Scanner's pages via NavBuilder, so it can never drift from the filesystem.
- * Drafts appear only for the signed-in admin, in the same way the nav hides them
- * from everyone else.
+ * Extra nodes: other plugins register providers on the `map.nodes` hook
+ * (see MapTree::attach for the node shape); private nodes are dropped
+ * server-side unless the viewer is admin.
  */
 
 use Papyr\Core\MapTree;
-use Papyr\Core\NavBuilder;
 
-if (!isset($_papyrPages, $_papyrSiteRoot, $_papyrEngine)) {
-    echo '<p>[PapyrCMS] site-map.php must be included after nav.php.</p>';
-    return;
-}
+// Entry runs only through the plugin loader (papyr_plugin() / boot). Requested
+// directly over HTTP it would run without a context — answer 404 and stop.
+if (!isset($p) || !$p instanceof \Papyr\Core\Context) { http_response_code(404); return; }
 
-$_psmDefaults = papyr_theme_defaults();
+$_psmAdmin    = $p->isAdmin();
+$_psmDefaults = $p->theme['defaults'];
 
 // Each page's node colour is the accent that page actually renders with:
 // its saved theme if it has one, otherwise the built-in default.
-$_psmThemeFor = static function (string $relPath) use ($_papyrSiteRoot, $_psmDefaults): array {
-    $saved  = papyr_load_theme($_papyrSiteRoot . '/' . $relPath, $_papyrSiteRoot);
-    $themed = isset($saved['accent-h']);
-    $t      = array_merge($_psmDefaults, $saved);
+$_psmThemeFor = static function (string $relPath) use ($p): array {
+    $t = $p->pageTheme($relPath);
     return [
-        'themed' => $themed,
+        'themed' => isset($t['saved']['accent-h']),
         'color'  => [
-            'h' => (float) $t['accent-h'],
-            's' => (float) $t['accent-s'],
-            'l' => (float) $t['accent-l'],
+            'h' => (float) $t['values']['accent-h'],
+            's' => (float) $t['values']['accent-s'],
+            'l' => (float) $t['values']['accent-l'],
         ],
     ];
 };
 
-$_psmTree = MapTree::fromNav(
-    NavBuilder::tree($_papyrPages, includeDrafts: $_papyrIsAdmin),
-    $_papyrLabel,
-    $_psmThemeFor
-);
+$_psmTree = MapTree::fromNav($p->tree['nested'], $p->site['label'], $_psmThemeFor);
+
+// Nodes contributed by boot plugins (e.g. a site's own data blocks).
+$_psmExtra = [];
+foreach ($p->providers('map.nodes') as $_psmOut) {
+    if (is_array($_psmOut)) {
+        foreach ($_psmOut as $_psmNode) {
+            $_psmExtra[] = $_psmNode;
+        }
+    }
+}
+if ($_psmExtra !== []) {
+    $_psmTree = MapTree::attach($_psmTree, $_psmExtra, $_psmAdmin);
+}
 
 $_psmJson = json_encode(
-    ['base' => $_papyrBasePath, 'admin' => $_papyrIsAdmin, 'root' => $_psmTree],
+    ['base' => $p->site['basePath'], 'admin' => $_psmAdmin, 'root' => $_psmTree],
     JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP
 );
 if ($_psmJson === false) {
@@ -57,8 +65,7 @@ if ($_psmJson === false) {
     $_psmJson = 'null';
 }
 
-$_psmAsset = static fn (string $rel): string =>
-    htmlspecialchars($_papyrBasePath . '/_papyr/assets/' . $rel, ENT_QUOTES, 'UTF-8');
+$_psmAsset = static fn (string $rel): string => htmlspecialchars($p->asset('site-map', $rel), ENT_QUOTES, 'UTF-8');
 ?>
 <style>
 #psm-stage {
@@ -87,6 +94,7 @@ $_psmAsset = static fn (string $rel): string =>
 .psm-label.is-root { font-size: .78rem; color: var(--accent); border-color: var(--border-bright); }
 .psm-label.is-dir  { text-transform: uppercase; letter-spacing: .2em; font-size: .56rem; color: var(--text-dim); }
 .psm-label.is-draft { font-style: italic; opacity: .7; }
+.psm-label.is-node  { font-size: .6rem; color: var(--text-dim); }
 .psm-label.is-selected { color: var(--accent); border-color: var(--accent); }
 
 .psm-head {
@@ -200,9 +208,12 @@ $_psmAsset = static fn (string $rel): string =>
     <span class="psm-key"><span class="psm-dot own"></span>own saved theme (glows)</span>
     <span class="psm-key"><span class="psm-dot def"></span>site default theme</span>
     <span class="psm-key"><span class="psm-dot dir"></span>folder</span>
-    <?php if ($_papyrIsAdmin): ?>
+    <?php if ($_psmAdmin): ?>
       <span class="psm-key"><span class="psm-dot draft"></span>draft (admin only)</span>
     <?php endif; ?>
+    <?php if ($_psmExtra !== []): foreach (MapTree::STATUS_COLORS as $_psmStatus => $_psmC): ?>
+      <span class="psm-key"><span class="psm-dot" style="background:hsl(<?= $_psmC['h'] ?> <?= $_psmC['s'] ?>% <?= $_psmC['l'] ?>%)"></span><?= htmlspecialchars($_psmStatus, ENT_QUOTES, 'UTF-8') ?></span>
+    <?php endforeach; endif; ?>
     <span class="psm-hint">drag to orbit · scroll to zoom · click to inspect · double-click to open</span>
     <button type="button" class="psm-btn" id="psm-reset">Reset view</button>
   </footer>
@@ -213,4 +224,4 @@ $_psmAsset = static fn (string $rel): string =>
 <script type="application/json" id="psm-data"><?= $_psmJson ?></script>
 <script src="<?= $_psmAsset('three/three.min.js') ?>"></script>
 <script src="<?= $_psmAsset('three/OrbitControls.js') ?>"></script>
-<script src="<?= $_psmAsset('js/site-map.js') ?>"></script>
+<script src="<?= $_psmAsset('site-map.js') ?>"></script>

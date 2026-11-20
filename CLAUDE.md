@@ -65,6 +65,9 @@ papyr-cms/                     ← site root (this repo doubles as the demo site
 │   ├── themes/                ← {pageKey}.json — saved theme overrides, one per page
 │   └── swatches/               ← preset HSL triplet "savestates" for the theme panel
 ├── assets/                    ← GSAP etc. (ignored by Scanner)
+├── map.php                    ← 3D site map page: papyr_plugin('site-map')
+├── _config/                   ← SITE-OWNED: sites.json, secret.php, invite.php (+ deny .htaccess)
+├── _plugins/                  ← SITE-OWNED plugins (optional; wins over a core plugin of the same name)
 │
 └── _papyr/                    ← the engine — sealed, self-contained
     ├── bootstrap.php          ← loads sites.json, instantiates $scanner / $ai
@@ -81,7 +84,12 @@ papyr-cms/                     ← site root (this repo doubles as the demo site
     │   └── manifest.json      ← regenerable. Deleting is always safe.
     │
     ├── config/
-    │   └── sites.json         ← cms block, ai block, sites block (see below)
+    │   └── sites.json.example ← shape of _config/sites.json (the live file is site-owned)
+    │
+    ├── plugins/               ← core plugins (replaced with the engine); .htaccess denies .php/.json
+    │   └── site-map/          ← plugin.json, plugin.php, site-map.js, three/ (Three.js r128)
+    │
+    ├── tests/                 ← php _papyr/tests/{panel,plugins}-test.php (lib.php = shared harness)
     │
     ├── core/
     │   ├── Scanner.php        ← filesystem walker, manifest builder, draft detection
@@ -90,7 +98,10 @@ papyr-cms/                     ← site root (this repo doubles as the demo site
     │   ├── PageWriter.php     ← Add Page → Twig render → write file; guardPath()
     │   ├── TemplateEngine.php ← Twig wrapper; extractVarNames()
     │   ├── TokenRegistry.php  ← theme token bound/unbound/missing reconciliation
-    │   └── UrlResolver.php    ← request-derived URL base path (no config, no hardcoding)
+    │   ├── UrlResolver.php    ← request-derived URL base path (no config, no hardcoding)
+    │   ├── Context.php        ← papyr(): the read-only request context
+    │   ├── Plugins.php        ← plugin discovery, manifest validation, boot/render runs
+    │   └── MapTree.php        ← nav tree → map graph; attach() for map.nodes providers
     │
     ├── templates/
     │   ├── cms/
@@ -135,11 +146,19 @@ lists more than one entry.
 - Read-only: does not build hrefs itself — callers (`nav.php`) combine `node['path']` with their own resolved base path
 - `tree($pages, includeDrafts: true)` keeps drafts (with a `draft` flag on each page node). Opt-in only — the nav never passes it; the admin's 3D site map does.
 
-### `_papyr/core/MapTree.php` + `templates/partials/site-map.php` + `assets/js/site-map.js`
-- Read-only 3D site map (step 1 of the 3D Mind Map → Papyr plan, 2026-11-18). `map.php` at the site root is a thin page: includes `nav.php`, then the partial.
+### Plugins (ADR-002 Phase D) — `_papyr/core/Plugins.php`, `papyr_plugin()`
+- Locations: `{siteRoot}/_plugins/{name}/` (site-owned, wins) then `_papyr/plugins/{name}/` (core). Each has `plugin.json` `{name, version, requires:{papyr}, entry, description}`; refused (logged, renders nothing) on bad name (`^[a-z0-9-]{1,40}$`), name ≠ folder, `requires.papyr` not met by `Version::ENGINE`, broken JSON, or an entry missing / outside the folder. A broken site copy does **not** fall back to the core copy.
+- **Render:** `papyr_plugin('name', $options)` (defined in nav.php — a no-op when the engine is missing). **Boot-only:** `sites.json` → `"plugins": [...]` (top level or inside the site entry) runs the entry during boot; anything it prints is discarded and logged.
+- Entry scope is exactly `$p` (Context), `$options`, `$plugin` (`name`, `version`, `mode`). Every entry starts with the guard `if (!isset($p) || !$p instanceof \Papyr\Core\Context) { http_response_code(404); return; }`, and plugin folders carry an `.htaccess` denying `.php`/`.json` (assets still served).
+- Hooks: `$p->provide($hook, fn(Context $p, array $args))`, `$p->providers($hook, $args)` → results in registration order; a throwing provider is logged and skipped. `$p->asset($plugin, $file)` → URL in whichever folder won. `$p->pageTheme($relPath)` → `{values, source, saved}` so plugins never need filesystem paths.
+- Rules (§6.4): read through `papyr()`, present through own assets, no write endpoints, no `global`.
+
+### `_papyr/core/MapTree.php` + the `site-map` core plugin (`_papyr/plugins/site-map/`)
+- Read-only 3D site map (step 1 of the 3D Mind Map → Papyr plan, 2026-11-18; a plugin since Phase D). `map.php` at the site root is a thin page: boots `nav.php`, then `papyr_plugin('site-map')`.
+- `MapTree::attach($root, $nodes, $admin)` adds `map.nodes` provider nodes (`kind: node`): `{id, parent (page path or node id; chains allowed), text, status, color, model, link, visibility}`. Status → fixed colours (`MapTree::STATUS_COLORS`: proven/caution/disproven/open, unknown → open, never re-themed). Private nodes dropped unless admin; links site-relative only; duplicates/orphans dropped and logged; `model` carried for ADR-003 (sphere drawn).
 - `MapTree::fromNav($tree, $rootLabel, $themeFor)` reshapes a NavBuilder tree into one rooted graph (`{id, text, kind: root|dir|page, path, color, themed, draft, …, children}`). Index pages fold into their container (top-level `index.php` → root node, `docs/index.php` → Docs folder node). Theme lookup is injected, so core never reads theme files itself.
-- Node colour = the accent that page actually renders with (its saved theme, else `papyr_theme_defaults()` from load-theme.php). Drafts appear only when `$_papyrIsAdmin`.
-- Renderer uses vendored Three.js r128 (UMD, global `THREE`) + classic `OrbitControls` in `_papyr/assets/three/` — no CDN, no build step. `map.php#node=<relPath>` deep-links a selection.
+- Node colour = the accent that page actually renders with (its saved theme, else `papyr_theme_defaults()` from load-theme.php). Drafts appear only for admin (they come from `papyr()->tree`).
+- Renderer uses vendored Three.js r128 (UMD, global `THREE`) + classic `OrbitControls` in `_papyr/plugins/site-map/three/` — no CDN, no build step. `map.php#node=<relPath>` deep-links a selection.
 
 ### `_papyr/core/UrlResolver.php`
 - `UrlResolver::basePath(string $siteRoot): string` — the URL path prefix the site is currently served under, resolved **purely from the request environment** (diffs `SCRIPT_NAME` against `SCRIPT_FILENAME`'s path relative to the site root)
@@ -194,7 +213,7 @@ lists more than one entry.
   - Groups (§5.1): `site` (key, label, basePath, url, engineVersion, invites), `page` (key, path, title, draft, cmsManaged, modified, theme{values, source}), `tree` (pages, nested — drafts only for admin), `user` (role, displayName, csrf — `''` for visitors), `theme` (tokens, defaults, swatches), `ai` (local/cloud: a provider is *configured* — no pings on page render; the dashboard's `status()` pings). Methods: `isAdmin()`, `isMember()`, `url()`, `api()`, `browser()`.
   - Never holds secrets, hashes, filesystem paths, AI hosts/models, or raw session data. Partials needing a path derive it themselves (`__DIR__`, `Session::siteRoot()`).
   - `window.PAPYR` (§5.2) = `{basePath, pageKey, role, csrf, api:{theme, unlock, comments, pages}}`, frozen, emitted once by `papyr_nav()`. Theme panel and comments JS read it; `api.pages` points at Phase E's endpoint (not built yet).
-  - **Deprecated (0.2.x, remove in 0.3):** the `$_papyr*` globals (still set at file scope for old pages and the site-map partial, which moves in Phase D) and Context's flat properties `basePath`, `label`, `pageKey`, `activePath`, `role`, `csrf`, `inviteReady`. New code uses `papyr()` groups.
+  - **Deprecated (0.2.x, remove in 0.3):** the `$_papyr*` globals (still set at file scope for old pages; nothing in the engine reads them) and Context's flat properties `basePath`, `label`, `pageKey`, `activePath`, `role`, `csrf`, `inviteReady`. New code uses `papyr()` groups.
 - Test: `php _papyr/tests/panel-test.php` — throw-away subfolder site over HTTP; panel per role, `window.PAPYR`, context groups, drafts, read-only, cookie path.
 - Pages boot before output: `define('PAPYR_DEFER_NAV', true);` + walk-up `require_once` above `<!DOCTYPE>`, then `<?php papyr_nav(); ?>` after `<body>`. Without the define, the last line of nav.php renders immediately (legacy pages keep working, but only get a session while PHP is still buffering output).
 - Missing `_papyr/` → `error_log()` and return; `papyr_nav()` renders nothing (no fatal).
@@ -248,6 +267,7 @@ requests — a POST can always be sent without going through the UI.
 | Endpoint | Gated? |
 |---|---|
 | `_papyr/api/save-theme.php` | ✅ admin + CSRF + same-origin, 403 JSON |
+| `_papyr/plugins/*/plugin.php`, `_plugins/*/plugin.php` | ✅ not web-runnable: entry guard (404) + folder `.htaccess` denying `.php`/`.json` (403) |
 | `_papyr/templates/partials/theme-panel.php` Commit button | ✅ hidden unless `papyr()->isAdmin()` (UX layer only — the real gate is save-theme.php) |
 | `_papyr/index.php` (dashboard + Add Page/Delete POST handlers) | ✅ admin (302 to login.php); POSTs also CSRF + same-origin |
 | `_papyr/api/ai.php` | ✅ admin + POST only + CSRF + same-origin, 403/405 JSON |

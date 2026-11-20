@@ -470,7 +470,7 @@ S/L 0–100%.
 |---|---|---|
 | A — Session & CSRF | `0dfcb7a` | Session identity is the site root only (not `siteKey|siteRoot`): login.php and the JSON endpoints skip bootstrap, so the root is the one value every entry point derives without config. |
 | B — `_config/` | `22633b6`, `a23d990`, `0b1c288` | Secrets resolve per file (`_config/` wins, legacy fallback), written `0640` + web-server group. Logout became a POST. `AIBridge.php` added to the classmap (several classes in one file). |
-| C — `papyr()` / `window.PAPYR` | `175cab3` + Phase C commit | See deviations below. |
+| C — `papyr()` / `window.PAPYR` | `175cab3`, `b94b904` | See deviations below. |
 
 Deviations from §5 (CLAUDE.md wins; flagged here so the ADR stays truthful):
 
@@ -488,4 +488,44 @@ Deviations from §5 (CLAUDE.md wins; flagged here so the ADR stays truthful):
 - Context uses `readonly` properties → PHP 8.1+ (Twig 3 already required 8.1).
 - The site-map partial still reads the deprecated `$_papyr*` globals; it moves onto
   `papyr()` with the plugin move in Phase D.
+
+## Status — Phase D done (2026-11-20)
+
+Plugin loader + manifest (`Papyr\Core\Plugins`), `papyr_plugin()`, `$p->asset()` /
+`provide()` / `providers()`, the site map moved to `_papyr/plugins/site-map/`, the `map.nodes`
+hook (`MapTree::attach()`), and SAL's boot-only `_plugins/sal-blocks/`. Tested by
+`_papyr/tests/plugins-test.php` (67 checks) on both installs; the map payload for visitor and
+admin is byte-identical to the pre-move partial on the real papyr-cms tree (mtimes aside).
+Preceded by two §8 fixes: `about.php` renders without `_papyr/` (`0b355d5`), and
+`composer.json` requires PHP 8.1 (`928c492`).
+
+Decisions the ADR left open, and deviations (CLAUDE.md wins; recorded so this stays true):
+
+- **Provider signature:** `fn(Context $p, array $args)`; `providers()` returns one result per
+  provider in registration order. A provider that throws is logged and skipped.
+- **Boot list location:** `"plugins"` is read from the top level of `sites.json` *and* from
+  the site's own entry (merged), ready for multi-site.
+- **Entry scope:** exactly `$p`, `$options`, `$plugin` (`name`, `version`, `mode`). Output
+  printed by a boot entry is discarded and logged, so it can never break headers or the
+  session. `papyr_plugin()` on a boot-only plugin does nothing (its providers already exist).
+- **A broken site copy does not fall back** to the core plugin of the same name: the site
+  asked for its own version, so silently running the engine's would hide the error.
+- **Version constraints:** `>= > <= < = !=`, `*`, `^x.y`, `~x.y`, space/comma = AND.
+  Unparseable → refused.
+- **New (not in §6): plugin code is not web-reachable.** Folders that serve assets also expose
+  `plugin.php`. Every entry starts with a context guard (404 when requested directly), and
+  `_papyr/plugins/.htaccess` / `_plugins/.htaccess` deny `.php` and `.json`. On Apache:
+  entries and manifests 403, assets 200. Nginx needs the equivalent rule (README, with §4.1's).
+- **`$p->pageTheme($relPath)`** was added to the context (not in §5.1) so the map can colour
+  each page without a filesystem path.
+- **Node rules (§6.6):** unknown `status` → `open`; `color` is honoured only when `status` is
+  absent; `link` must be site-relative (no scheme, no `//`, no `..`) or it is removed;
+  duplicate ids and nodes whose parent never appears are dropped and logged; parents may be
+  other provider nodes, in any order. `model` is validated and carried, not rendered (ADR-003).
+- **SAL statuses** go through SAL's own badge classes (`sal_status()`): `planned` → open,
+  `next`/`active`/`done` → proven. `sal-blocks` is self-contained rather than including
+  `includes/data.php`, which would define the site's helpers on every page at boot.
+  Model `src` follows SAL's real download path (`files/<name>.glb`), not `data/media/models/`.
+- **Map card:** unchanged. The visitor/admin split of file metadata (§7.2) belongs to Phase E.
+- **Housekeeping (§10)** map items — label prefix, FOV — not done; independent of the move.
 

@@ -51,3 +51,6 @@ data/comments/
 # Site config: only the deny rule is tracked; sites.json and secrets stay local
 /_config/sites.json
 !/_config/.htaccess
+# Plugin folders: the deny-code rule is tracked
+!/_papyr/plugins/.htaccess
+!/_plugins/.htaccess

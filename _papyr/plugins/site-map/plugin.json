@@ -1,0 +1,7 @@
+{
+    "name": "site-map",
+    "version": "1.0.0",
+    "requires": { "papyr": ">=0.2.0" },
+    "entry": "plugin.php",
+    "description": "Live 3D map of the site's pages, read straight from the filesystem."
+}

@@ -122,7 +122,16 @@ Context::boot(new Context(
         'swatches' => papyr_swatches_enumerate($_papyrSiteRoot . '/data/swatches'),
     ],
     ai: $ai->configured(),
+    root: $_papyrSiteRoot,
 ));
+
+// Boot-only plugins (ADR-002 §6.3): the one config-driven case, because their
+// providers must exist before any page renders. sites.json → "plugins": [...]
+// at the top level, or inside this site's entry.
+Papyr\Core\Plugins::boot(
+    array_merge((array) ($config['plugins'] ?? []), (array) ($_papyrSiteConf['plugins'] ?? [])),
+    Context::current()
+);
 unset($_papyrCtxPages, $_papyrPageRow);
 
 // DEPRECATED aliases (0.2.x, removed in 0.3) for pages and partials written
@@ -161,6 +170,20 @@ function papyrNavTree(array $nodes, string $active, int $depth = 0, string $urlB
 function papyr(): Context
 {
     return Context::current();
+}
+
+/**
+ * Render a plugin where called (ADR-002 §6.3) — calling it is the opt-in.
+ *   <?php papyr_plugin('site-map'); ?>
+ *   <?php papyr_plugin('site-map', ['height' => '80vh']); ?>
+ * Renders nothing (never a fatal) when the engine or the plugin is missing.
+ */
+function papyr_plugin(string $name, array $options = []): void
+{
+    if (!class_exists(Context::class) || !Context::current()->ready) {
+        return;
+    }
+    Papyr\Core\Plugins::render($name, Context::current(), $options);
 }
 
 /**

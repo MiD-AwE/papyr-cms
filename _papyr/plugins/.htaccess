@@ -1,0 +1,11 @@
+# Plugin folders serve their assets (JS, images, models) but never their
+# code or manifests: entries run only through the Papyr plugin loader.
+<FilesMatch "\.(php|phtml|json)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>

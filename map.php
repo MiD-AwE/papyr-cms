@@ -14,10 +14,7 @@ unset($_d);
   <meta name="description" content="Every page on this site as a live 3D map, read straight from the filesystem." />
 </head>
 <body>
-<?php
-papyr_nav();
-
-include $_papyrEngine . '/templates/partials/site-map.php';
-?>
+<?php papyr_nav(); ?>
+<?php papyr_plugin('site-map'); ?>
 </body>
 </html>

@@ -1,14 +1,16 @@
 /*
  * PapyrCMS 3D site map — renderer.
  *
- * Reads the node graph that templates/partials/site-map.php embeds in
+ * Reads the node graph that the site-map plugin (plugin.php) embeds in
  * #psm-data and draws it with Three.js (r128, global THREE). Read-only:
  * nothing here writes anywhere. Layout is a small force simulation adapted
  * from the 3D Mind Map prototype: children spring toward their parent,
  * every node repels every other, and the root stays pinned at the origin.
  *
- * Node shape: { id, text, kind: root|dir|page, path, page_title, color: {h,s,l}|null,
+ * Node shape: { id, text, kind: root|dir|page|node, path, page_title, color: {h,s,l}|null,
  *               themed, draft, cms_managed, mtime, children: [] }
+ * kind "node" comes from map.nodes providers (ADR-002 §6.6) and adds
+ *   { status, link, model, visibility } — fixed status colour, optional link.
  */
 (function () {
   'use strict';
@@ -29,7 +31,7 @@
   var REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   // Layout constants (tuned for sites of a handful to a few hundred pages).
-  var RADIUS       = { root: 5, dir: 3.4, page: 2.5 };
+  var RADIUS       = { root: 5, dir: 3.4, page: 2.5, node: 1.8 };
   var REST_LENGTH  = 26;
   var REPULSION    = 900;
   var SPRING       = 0.9;
@@ -163,10 +165,12 @@
 
   var pageCount = nodes.filter(function (n) { return n.data.path; }).length;
   var dirCount  = nodes.filter(function (n) { return n.data.kind === 'dir'; }).length;
+  var itemCount = nodes.filter(function (n) { return n.data.kind === 'node'; }).length;
   var summary = document.getElementById('psm-summary');
   if (summary) {
     summary.textContent = pageCount + ' page' + (pageCount === 1 ? '' : 's') +
       (dirCount ? ' · ' + dirCount + ' folder' + (dirCount === 1 ? '' : 's') : '') +
+      (itemCount ? ' · ' + itemCount + ' item' + (itemCount === 1 ? '' : 's') : '') +
       ' · live from the filesystem';
   }
 
@@ -282,9 +286,17 @@
     });
   }
   function href(n) { return BASE + '/' + n.data.path.split('/').map(encodeURIComponent).join('/'); }
+  // Provider-node links are validated server-side (site-relative, optional #fragment).
+  function linkHref(n) {
+    var parts = n.data.link.split('#');
+    return BASE + '/' + parts[0].split('/').map(encodeURIComponent).join('/') +
+      (parts.length > 1 ? '#' + encodeURIComponent(parts.slice(1).join('#')) : '');
+  }
+  function openUrl(n) { return n.data.path ? href(n) : (n.data.kind === 'node' && n.data.link ? linkHref(n) : null); }
   function kindLabel(n) {
     if (n.data.kind === 'root') return 'Site root';
     if (n.data.kind === 'dir') return 'Folder';
+    if (n.data.kind === 'node') return 'Item';
     return 'Page';
   }
 
@@ -293,7 +305,8 @@
     var d = n.data, html = '';
     html += '<button type="button" class="psm-close" data-close aria-label="Close">×</button>';
     html += '<h2>' + esc(d.text) + (d.draft ? '<span class="psm-badge">draft</span>' : '') + '</h2>';
-    html += '<p class="psm-path">' + esc(d.path ? '/' + d.path : (d.kind === 'dir' ? '/' + d.id : '/')) + '</p>';
+    if (d.kind === 'node') html += '<p class="psm-path">' + esc(d.link ? '/' + d.link : d.id) + '</p>';
+    else html += '<p class="psm-path">' + esc(d.path ? '/' + d.path : (d.kind === 'dir' ? '/' + d.id : '/')) + '</p>';
     html += '<dl><dt>Type</dt><dd>' + kindLabel(n) + '</dd>';
     if (d.page_title && d.page_title !== d.text) html += '<dt>Page</dt><dd>' + esc(d.page_title) + '</dd>';
     if (d.path) {
@@ -304,9 +317,14 @@
       html += '<dt>Origin</dt><dd>' + (d.cms_managed ? 'created in Papyr' : 'hand-made file') + '</dd>';
     } else if (d.kind === 'dir') {
       html += '<dt>Index</dt><dd>none — a grouping folder</dd>';
+    } else if (d.kind === 'node') {
+      var sc = d.color ? hsl(d.color.h, d.color.s, d.color.l).getStyle() : '';
+      html += '<dt>Status</dt><dd><span class="psm-swatch" style="background:' + sc + '"></span>' + esc(d.status || 'open') + '</dd>';
+      if (d.visibility === 'private') html += '<dt>Visibility</dt><dd>private (admin only)</dd>';
     }
     html += '</dl>';
     if (d.path) html += '<a class="psm-open" href="' + esc(href(n)) + '">Open page</a>';
+    else if (d.kind === 'node' && d.link) html += '<a class="psm-open" href="' + esc(linkHref(n)) + '">Open</a>';
 
     if (n.parent || n.children.length) {
       html += '<h3>Connections</h3><ul>';
@@ -410,7 +428,8 @@
   });
   renderer.domElement.addEventListener('dblclick', function (e) {
     var n = pick(e);
-    if (n && n.data.path) window.location.href = href(n);
+    var url = n && openUrl(n);
+    if (url) window.location.href = url;
   });
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && selected) select(null);

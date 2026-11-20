@@ -19,6 +19,12 @@ namespace Papyr\Core;
  *   $p->theme  tokens (component token names), defaults, swatches
  *   $p->ai     ['local' => bool, 'cloud' => bool] — a provider is configured (no pings)
  *
+ *   $p->url($rel)              base-path-safe link
+ *   $p->asset($plugin, $file)  URL of a file inside a plugin folder (Phase D)
+ *   $p->provide($hook, $fn)    register a provider, e.g. 'map.nodes' (Phase D)
+ *   $p->providers($hook, $args) collect every provider's output, in registration order
+ *   $p->pageTheme($relPath)    another page's theme {values, source} (read-only)
+ *
  * Read-only: readonly properties, arrays handed out by value, no setters, no
  * write capability. Never holds secrets, hashes, filesystem paths, AI
  * hosts/ports/models, or raw session contents.
@@ -32,6 +38,9 @@ namespace Papyr\Core;
 final class Context
 {
     private static ?self $current = null;
+
+    /** @var array<string, list<callable>> hook => providers (Phase D) */
+    private static array $providers = [];
 
     /** @deprecated 0.2.x — use site['basePath'] */
     public readonly string $basePath;
@@ -56,6 +65,7 @@ final class Context
         public readonly array $user,
         public readonly array $theme,
         public readonly array $ai,
+        private readonly string $root = '',   // site root — engine-internal, never exposed
     ) {
         $this->basePath    = (string) ($site['basePath'] ?? '');
         $this->label       = (string) ($site['label'] ?? '');
@@ -101,6 +111,70 @@ final class Context
     public function url(string $relPath = ''): string
     {
         return $this->site['basePath'] . '/' . ltrim($relPath, '/');
+    }
+
+    /**
+     * URL of a file inside a plugin folder, e.g. asset('site-map', 'three/three.min.js').
+     * Resolves the site copy before the core copy, like the loader. '' when the
+     * plugin is unusable or the file name is unsafe.
+     */
+    public function asset(string $plugin, string $file): string
+    {
+        $segments = explode('/', $file);
+        foreach ($segments as $seg) {
+            if (preg_match('/^[A-Za-z0-9_][A-Za-z0-9_.-]*$/', $seg) !== 1 || $seg === '..') {
+                return '';
+            }
+        }
+        $found = Plugins::find($plugin);
+        if ($found === null) {
+            return '';
+        }
+        return $this->site['basePath'] . $found['urlPrefix'] . '/' . implode('/', array_map('rawurlencode', $segments));
+    }
+
+    /** Register a provider for a hook (ADR-002 §6.6). Hook names: ^[a-z0-9.-]{1,60}$. */
+    public function provide(string $hook, callable $fn): void
+    {
+        if (preg_match('/^[a-z0-9.-]{1,60}$/', $hook) !== 1) {
+            error_log("[PapyrCMS] provide(): invalid hook name '{$hook}' ignored.");
+            return;
+        }
+        self::$providers[$hook][] = $fn;
+    }
+
+    /**
+     * Call every provider for $hook as fn(Context $p, array $args) and return
+     * their results in registration order. A provider that throws is logged
+     * and skipped — one broken plugin never takes a page down.
+     */
+    public function providers(string $hook, array $args = []): array
+    {
+        $out = [];
+        foreach (self::$providers[$hook] ?? [] as $i => $fn) {
+            try {
+                $out[] = $fn($this, $args);
+            } catch (\Throwable $e) {
+                error_log("[PapyrCMS] provider #{$i} for '{$hook}' failed: " . $e->getMessage());
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Theme of another page on this site — what it renders with: its saved
+     * values over the defaults. {values, source: 'page'|'default', saved}
+     * where `saved` is exactly what the page's theme file holds ([] if none).
+     */
+    public function pageTheme(string $relPath): array
+    {
+        $defaults = $this->theme['defaults'];
+        $relPath  = ltrim($relPath, '/');
+        if ($this->root === '' || $relPath === '' || str_contains($relPath, '..') || !function_exists('papyr_load_theme')) {
+            return ['values' => $defaults, 'source' => 'default', 'saved' => []];
+        }
+        $saved = papyr_load_theme($this->root . '/' . $relPath, $this->root);
+        return ['values' => array_merge($defaults, $saved), 'source' => $saved === [] ? 'default' : 'page', 'saved' => $saved];
     }
 
     /** Engine endpoint URLs — the same map window.PAPYR.api carries. */
