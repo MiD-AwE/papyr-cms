@@ -46,4 +46,8 @@ data/comments/
 
 # Site media is content, not code: keep the folder, not the files
 /data/media/*
-!/data/media/.gitkeep/_config/sites.json
+!/data/media/.gitkeep
+
+# Site config: only the deny rule is tracked; sites.json and secrets stay local
+/_config/sites.json
+!/_config/.htaccess
