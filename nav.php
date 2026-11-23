@@ -30,6 +30,7 @@ use Papyr\Core\Context;
 use Papyr\Core\MemberAuth;
 use Papyr\Core\NavBuilder;
 use Papyr\Core\Session;
+use Papyr\Core\TemplateEngine;
 use Papyr\Core\UrlResolver;
 use Papyr\Core\Version;
 
@@ -51,6 +52,10 @@ $_papyrSiteKey  = (string) array_key_first($sites);
 $_papyrSiteConf = $sites[$_papyrSiteKey] ?? [];
 $_papyrSiteRoot = rtrim($_papyrSiteConf['root'] ?? __DIR__, '/');
 $_papyrLabel    = $_papyrSiteConf['label'] ?? ($config['cms']['name'] ?? 'Papyr CMS');
+
+// A hand-made _templates/ gets its deny-Twig-source rule the first time any
+// page boots (one is_dir per request; an existing .htaccess is never touched).
+TemplateEngine::siteDir($_papyrSiteRoot);
 
 // URL base path for nav links, assets, and API calls — resolved once from
 // the request environment (SCRIPT_NAME vs. the site root's filesystem path),

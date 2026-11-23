@@ -56,12 +56,30 @@ class TemplateEngine
     public static function rootsFor(string $siteRoot, string $engineDir): array
     {
         $roots = [];
-        $site  = rtrim($siteRoot, '/') . '/' . self::SITE_DIR;
-        if ($siteRoot !== '' && is_dir($site)) {
+        $site  = self::siteDir($siteRoot);
+        if ($site !== null) {
             $roots[] = $site;
         }
         $roots[] = rtrim($engineDir, '/') . '/templates';
         return $roots;
+    }
+
+    /**
+     * {siteRoot}/_templates when it exists, else null. The folder is made by
+     * hand, so the first time the engine finds it without a deny rule it adds
+     * one for Twig sources (DenyRule); an existing .htaccess is left alone.
+     */
+    public static function siteDir(string $siteRoot): ?string
+    {
+        if ($siteRoot === '') {
+            return null;
+        }
+        $dir = rtrim($siteRoot, '/') . '/' . self::SITE_DIR;
+        if (!is_dir($dir)) {
+            return null;
+        }
+        DenyRule::ensure($dir, 'PapyrCMS: site templates are rendered by the engine, never served as source.', '\\.twig$');
+        return $dir;
     }
 
     /** An engine over rootsFor($siteRoot, $engineDir). */

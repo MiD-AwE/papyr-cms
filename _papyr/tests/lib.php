@@ -94,6 +94,41 @@ function startServer(string $tmp): array {
 }
 
 /**
+ * Start a real Apache (it honours .htaccess; PHP's built-in server does not) with
+ * mod_php, unprivileged, on a free port, docroot $tmp. Uses XAMPP's layout
+ * (/opt/lampp, or PAPYR_TEST_LAMPP). Returns [port, null] or [0, "why skipped"].
+ */
+function startApache(string $tmp): array {
+    $root  = getenv('PAPYR_TEST_LAMPP') ?: '/opt/lampp';
+    $httpd = "$root/bin/httpd";
+    foreach (["$httpd", "$root/modules/libphp.so", "$root/modules/mod_authz_core.so", "$root/modules/mod_access_compat.so"] as $need) {
+        if (!is_file($need)) { return [0, "no Apache with mod_php at $root ($need missing)"]; }
+    }
+    $sock = stream_socket_server('tcp://127.0.0.1:0', $en, $es);
+    $port = (int) explode(':', (string) stream_socket_get_name($sock, false))[1];
+    fclose($sock);
+    $conf = "$tmp/httpd.conf";
+    $mods = '';
+    foreach (['authz_core', 'authz_host', 'access_compat', 'mime', 'dir', 'unixd'] as $m) {
+        $mods .= "LoadModule {$m}_module modules/mod_{$m}.so\n";
+    }
+    file_put_contents($conf, "ServerRoot $root\nServerName 127.0.0.1\nListen 127.0.0.1:$port\nPidFile $tmp/httpd.pid\n"
+        . "ErrorLog $tmp/httpd-error.log\n{$mods}LoadModule php_module modules/libphp.so\nTypesConfig etc/mime.types\n"
+        . "DocumentRoot $tmp\n<Directory $tmp>\n  AllowOverride All\n  Require all granted\n</Directory>\n"
+        . "<FilesMatch \"\\.php$\">\n  SetHandler application/x-httpd-php\n</FilesMatch>\nDirectoryIndex index.php index.html\n"
+        . "php_admin_value session.save_path $tmp\nphp_admin_value error_log $tmp/php-errors.log\n");
+    exec(escapeshellarg($httpd) . ' -f ' . escapeshellarg($conf) . ' -k start 2>&1', $out, $rc);
+    for ($i = 0; $i < 50 && !@fsockopen('127.0.0.1', $port); $i++) { usleep(100000); }
+    if ($rc !== 0 || !@fsockopen('127.0.0.1', $port)) { return [0, 'httpd did not start: ' . implode(' ', $out)]; }
+    register_shutdown_function(function () use ($httpd, $conf, $tmp) {
+        exec(escapeshellarg($httpd) . ' -f ' . escapeshellarg($conf) . ' -k stop 2>&1');
+        for ($i = 0; $i < 30 && is_file("$tmp/httpd.pid"); $i++) { usleep(100000); }
+        rmTree($tmp);
+    });
+    return [$port, null];
+}
+
+/**
  * Build a throw-away subfolder site from this engine: {tmp}/t-site/ with a
  * copy of _papyr/ (no cache, tests or secrets), nav.php, _config/sites.json
  * and an admin password. $siteExtra merges into the site's sites.json entry,

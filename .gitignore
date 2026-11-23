@@ -54,6 +54,8 @@ data/comments/
 # Plugin folders: the deny-code rule is tracked
 !/_papyr/plugins/.htaccess
 !/_plugins/.htaccess
+# Engine templates: the deny-Twig-source rule is tracked
+!/_papyr/templates/.htaccess
 
 # Saved page themes are site content; only the demo homepage's theme ships
 /data/themes/*

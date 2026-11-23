@@ -106,6 +106,27 @@ class PageWriter
         return $this->engine->extractVarNames($this->template);
     }
 
+    /** Site-owned trash folder (ADR-002 §7.1): survives engine upgrades, never served. */
+    public const TRASH_DIR = '_trash';
+
+    /**
+     * {siteRoot}/_trash, created with its deny rule if missing. PageWriter's
+     * trash action (E2) moves pages here; restore is by hand.
+     *
+     * @throws \RuntimeException the folder or its deny rule cannot be written
+     */
+    public function trashDir(): string
+    {
+        $dir = $this->siteRoot . '/' . self::TRASH_DIR;
+        if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
+            throw new \RuntimeException("PageWriter: could not create {$dir}");
+        }
+        if (!DenyRule::ensure($dir, 'PapyrCMS trash: restore by moving a file back by hand. Never served.')) {
+            throw new \RuntimeException("PageWriter: could not protect {$dir}");
+        }
+        return $dir;
+    }
+
     /** "" for "page.php", "../" for "docs/page.php", "../../" for "a/b/page.php". */
     public static function rootPrefix(string $relPath): string
     {

@@ -57,12 +57,13 @@ final class Starters
             return $this->cache;
         }
         $found = [];
+        $siteDir = TemplateEngine::siteDir($this->siteRoot);
         $roots = [
-            'site'   => rtrim($this->siteRoot, '/') . '/' . TemplateEngine::SITE_DIR . '/' . self::DIR,
+            'site'   => $siteDir === null ? null : $siteDir . '/' . self::DIR,
             'engine' => rtrim($this->engineDir, '/') . '/templates/' . self::DIR,
         ];
         foreach ($roots as $source => $dir) {
-            if (($source === 'site' && $this->siteRoot === '') || !is_dir($dir)) {
+            if ($dir === null || !is_dir($dir)) {
                 continue;
             }
             foreach (scandir($dir) ?: [] as $name) {

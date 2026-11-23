@@ -74,15 +74,11 @@ final class SiteConfig
             }
             $notes[] = "created {$dir}";
         }
-        $ht = $dir . '/.htaccess';
+        $ht = $dir . '/' . DenyRule::FILE;
         if (!is_file($ht)) {
-            $body = "# Site-owned config and secrets — never served over HTTP.\n"
-                . "<IfModule mod_authz_core.c>\n    Require all denied\n</IfModule>\n"
-                . "<IfModule !mod_authz_core.c>\n    Order allow,deny\n    Deny from all\n</IfModule>\n";
-            if (file_put_contents($ht, $body) === false) {
+            if (!DenyRule::ensure($dir, 'Site-owned config and secrets — never served over HTTP.')) {
                 throw new \RuntimeException("SiteConfig: could not write {$ht}");
             }
-            @chmod($ht, 0644);
             $notes[] = "wrote {$ht} (deny all)";
         }
         return $notes;

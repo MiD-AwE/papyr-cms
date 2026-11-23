@@ -106,10 +106,7 @@ class Comments
         if (!is_dir($this->dir) && !mkdir($this->dir, 0775, true) && !is_dir($this->dir)) {
             throw new \RuntimeException('Comments: cannot create ' . $this->dir);
         }
-        $ht = $this->dir . '/.htaccess';
-        if (!is_file($ht)) {
-            file_put_contents($ht, "# PapyrCMS: comments are served only through _papyr/api/comments.php\nRequire all denied\n");
-        }
+        DenyRule::ensure($this->dir, 'PapyrCMS: comments are served only through _papyr/api/comments.php');
     }
 
     private function file(string $pageKey): string
