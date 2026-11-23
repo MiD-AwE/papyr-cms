@@ -116,7 +116,7 @@ foreach ($sites as $key => $site) {
     $templateName     = $site['template'] ?? '';
     if ($templateName !== '') {
         try {
-            $engine = new TemplateEngine([__DIR__ . '/templates']);
+            $engine = TemplateEngine::forSite((string) ($site['root'] ?? ''), __DIR__);
             $templateVarNames = $engine->extractVarNames($templateName);
         } catch (\Throwable $e) {
             // Template missing — form will still render without auto-fields

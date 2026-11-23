@@ -13,7 +13,8 @@ class PageWriter
      * $siteConfig — the entry from sites.json['sites'][$siteKey]
      * $engineDir  — absolute path to the papyrCMS engine directory
      *
-     * Templates are resolved under $engineDir/templates/.
+     * Templates are resolved under {siteRoot}/_templates/ first (site-owned),
+     * then $engineDir/templates/ — see TemplateEngine::rootsFor().
      */
     public function __construct(
         private Scanner $scanner,
@@ -24,9 +25,7 @@ class PageWriter
         $this->siteRoot = rtrim($siteConfig['root'] ?? '', '/');
         $this->template = $siteConfig['template'] ?? 'page.html.twig';
 
-        $this->engine = new TemplateEngine([
-            rtrim($engineDir, '/') . '/templates',
-        ]);
+        $this->engine = TemplateEngine::forSite($this->siteRoot, $engineDir);
     }
 
     /*

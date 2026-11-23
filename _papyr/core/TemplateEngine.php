@@ -40,6 +40,36 @@ class TemplateEngine
         ]);
     }
 
+    /** Site-owned template root, relative to the site root (ADR-002 §7.3). */
+    public const SITE_DIR = '_templates';
+
+    /*
+     * The loader roots for a site, in lookup order:
+     *   {siteRoot}/_templates/   — site-owned, survives engine upgrades (only if it exists)
+     *   {engineDir}/templates/   — engine-owned, replaced with _papyr/
+     * The first root holding a template name wins, so a site copy overrides
+     * the engine's on a name clash. Twig refuses roots that do not exist,
+     * which is why the site root is only added when the folder is there.
+     *
+     * @return string[]
+     */
+    public static function rootsFor(string $siteRoot, string $engineDir): array
+    {
+        $roots = [];
+        $site  = rtrim($siteRoot, '/') . '/' . self::SITE_DIR;
+        if ($siteRoot !== '' && is_dir($site)) {
+            $roots[] = $site;
+        }
+        $roots[] = rtrim($engineDir, '/') . '/templates';
+        return $roots;
+    }
+
+    /** An engine over rootsFor($siteRoot, $engineDir). */
+    public static function forSite(string $siteRoot, string $engineDir, ?string $cacheDir = null): self
+    {
+        return new self(self::rootsFor($siteRoot, $engineDir), $cacheDir);
+    }
+
     /*
      * Template names must be relative to a loader root, but a caller may
      * accidentally pass a name that already repeats part of that root
