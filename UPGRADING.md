@@ -13,3 +13,5 @@
 Secret files are `0640`, group = the web server's group (XAMPP: `daemon`; Debian/Ubuntu: `www-data`).
 If login says the secret file is *unreadable*: `sudo chgrp <web-group> _config/secret.php`.
 Under nginx, deny the folder yourself: `location ^~ /_config/ { deny all; }` (same for `/data/comments/`).
+
+`data/themes/`, `data/comments/` and `_papyr/cache/` must be writable by daemon. It’s the same lesson as the secret files, and the next install shouldn’t have to rediscover it.
