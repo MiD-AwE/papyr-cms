@@ -586,15 +586,33 @@ Decisions and deviations (CLAUDE.md wins; recorded so this stays true):
   enforces required fields.
 - **`PageWriter::write($relPath, $vars, ?$template)`** passes `root` (`""`, `"../"`, …).
 
-Carried into E2 (found during E1, deliberately not changed yet):
+Found during E1 and settled before E2 (2026-11-23):
 
-- `PageWriter::write()` still **overwrites** an existing file. `pages.php` `create` must
-  refuse an existing path.
-- `html` fields are written raw (as `body_content|raw` already was), so an admin can put PHP
-  in a page. That is admin-tier and consistent with today, but E2 should decide explicitly
-  whether to strip `<?`.
-- Twig sources under `_papyr/templates/` and `_templates/` are web-readable (not executable,
-  not secret). Decide in E2's docs whether to ship a deny rule alongside `_config/`'s.
-- The dashboard's existing Add Page form still renders the site's `template`. E2 replaces
-  it with the starter picker.
+- **Theme reset never relied on an empty save.** The panel's Reset is client-only (it
+  restores `:root` from the defaults and never calls the server), and Commit always sends
+  `mode`. A literally empty theme was already a 400. So refusing an unknown-keys-only
+  payload breaks nothing, and no explicit reset action is needed.
+- **Deny rules** (`2adae4e`): `Papyr\Core\DenyRule` is the one writer of deny `.htaccess`
+  files and never overwrites an existing one. `_papyr/templates/.htaccess` (tracked) denies
+  `*.twig`. A hand-made `_templates/` gets the same rule the first time a page boots
+  (`TemplateEngine::siteDir()`, called from `nav.php`). `_config/`, `data/comments/` and
+  `_trash/` (`PageWriter::trashDir()`) deny everything. `tests/deny-test.php` (23 checks)
+  proves the 403s under real Apache, with a negative control. UPGRADING lists the nginx
+  equivalents.
 
+## Phase E2 — decisions (2026-11-23)
+
+- **`create` never overwrites.** If the target path exists (file or folder), `pages.php`
+  refuses with a 409 and the file is untouched. PageWriter gains an explicit no-overwrite
+  write for this, not a check-then-write in the endpoint alone.
+- **Web-submitted fields never produce executable PHP.** Every submitted value, `html`
+  fields included, has `<?` neutralised to `&lt;?` before rendering. That covers `<?php`,
+  `<?=` and short tags; the `<script language="php">` and ASP-style tags were removed in
+  PHP 7. As a second gate, PageWriter tokenises the rendered output
+  (`token_get_all`) and refuses to write if it holds more PHP open tags than the starter
+  produces with empty fields. Raw PHP in a page remains a manual-edit feature: an
+  admin edits the file by hand, never through a web form.
+- **Deny rules are in place before E2** (see above); `trash` creates `_trash/` only
+  through `PageWriter::trashDir()`.
+- E2's scope is otherwise as split in §7: `pages.php`, map card actions, the Add Page form
+  from `starter.json`, typed colour input, docs and `pages-test.php`.
