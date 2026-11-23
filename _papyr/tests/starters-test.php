@@ -18,6 +18,7 @@ declare(strict_types=1);
  *   - over HTTP: the landing page renders with nav and its sections; it still
  *     renders with the starter folder removed, and with _papyr/ removed
  *   - a site starter survives replacing _papyr/
+ *   - PageWriter errors name site-relative paths only; the full path is logged
  */
 
 if (PHP_SAPI !== 'cli') { exit('CLI only.'); }
@@ -122,6 +123,22 @@ try {
     check('landing: placeholder copy fills empty fields', str_contains($landing, 'How it works'));
     check('article: html body kept raw', str_contains((string) file_get_contents("$site/made/article.php"), '<p>Body <b>bold</b></p>'));
     check('site blank starter used', str_contains((string) file_get_contents("$site/made/blank.php"), 'class="site-blank"'));
+
+    echo "errors: site-relative in the message, full path in the log\n";
+    $err = function (callable $fn): string {
+        try { $fn(); return ''; } catch (\RuntimeException $e) { return $e->getMessage(); }
+    };
+    mkdir("$site/locked", 0555);
+    $msg = $err(fn() => $writer->write('locked/sub/page.php', ['title' => 'x'], $s->get('blank')['template']));
+    check('unwritable folder: message names locked/sub', str_contains($msg, 'locked/sub'), $msg);
+    check('unwritable folder: no absolute path in message', $msg !== '' && !str_contains($msg, $tmp), $msg);
+    check('unwritable folder: absolute path logged', str_contains((string) @file_get_contents($logFile), "$site/locked/sub"));
+    chmod("$site/locked", 0755);
+    $msg = $err(fn() => $writer->write('made/x.php', ['title' => 'x'], 'starters/nope/page.html.twig'));
+    check('missing template: message names the template', str_contains($msg, 'starters/nope/page.html.twig'), $msg);
+    check('missing template: no absolute path in message', $msg !== '' && !str_contains($msg, $tmp), $msg);
+    check('missing template: Twig detail (with paths) logged', str_contains((string) @file_get_contents($logFile), "$engine/templates"));
+    check('missing template: nothing written', !file_exists("$site/made/x.php"));
 
     echo "HTTP\n";
     [$srv, $port] = startServer($tmp);

@@ -41,27 +41,33 @@ class PageWriter
      * down), so links written into the page work on any base path, with or
      * without the engine.
      *
-     * Returns the absolute path of the written file.
+     * Returns the absolute path of the written file (for the caller's own
+     * use; never show it in the UI).
      * Throws \InvalidArgumentException on unsafe path.
-     * Throws \RuntimeException on render or write failure.
+     * Throws \RuntimeException on render or write failure; its message holds
+     * only site-relative paths, and the full path is logged (see fail()).
      */
     public function write(string $relPath, array $vars, ?string $template = null): string
     {
         $this->guardPath($relPath);
 
         $vars['root'] = self::rootPrefix($relPath);
-        $output  = $this->engine->render($template ?? $this->template, $vars);
+        $name = $template ?? $this->template;
+        try {
+            $output = $this->engine->render($name, $vars);
+        } catch (\RuntimeException $e) {
+            // Twig's messages can name the loader's absolute directories.
+            $this->fail("could not render template {$name}", $e->getMessage(), $e);
+        }
         $absPath = $this->siteRoot . '/' . $relPath;
 
         $dir = dirname($absPath);
-        if (!is_dir($dir)) {
-            if (!mkdir($dir, 0755, true)) {
-                throw new \RuntimeException("PageWriter: could not create directory {$dir}");
-            }
+        if (!is_dir($dir) && !@mkdir($dir, 0755, true) && !is_dir($dir)) {
+            $this->fail('could not create folder ' . $this->rel($dir), $dir);
         }
 
-        if (file_put_contents($absPath, $output) === false) {
-            throw new \RuntimeException("PageWriter: write failed for {$absPath}");
+        if (@file_put_contents($absPath, $output) === false) {
+            $this->fail("could not write {$relPath}", $absPath);
         }
 
         // Rescan so the manifest includes the new file, then mark it managed.
@@ -86,8 +92,8 @@ class PageWriter
             return false;
         }
 
-        if (!unlink($absPath)) {
-            throw new \RuntimeException("PageWriter: delete failed for {$absPath}");
+        if (!@unlink($absPath)) {
+            $this->fail("could not delete {$relPath}", $absPath);
         }
 
         // Rescan so the manifest reflects the deletion.
@@ -119,12 +125,34 @@ class PageWriter
     {
         $dir = $this->siteRoot . '/' . self::TRASH_DIR;
         if (!is_dir($dir) && !mkdir($dir, 0755, true) && !is_dir($dir)) {
-            throw new \RuntimeException("PageWriter: could not create {$dir}");
+            $this->fail('could not create ' . self::TRASH_DIR . '/', $dir);
         }
         if (!DenyRule::ensure($dir, 'PapyrCMS trash: restore by moving a file back by hand. Never served.')) {
-            throw new \RuntimeException("PageWriter: could not protect {$dir}");
+            $this->fail('could not protect ' . self::TRASH_DIR . '/', $dir);
         }
         return $dir;
+    }
+
+    /**
+     * Throw a RuntimeException whose message is safe to show in the UI (site-
+     * relative paths only) and log the full detail, absolute paths included.
+     * Every PageWriter failure goes through here, so callers may display
+     * getMessage() as is.
+     */
+    private function fail(string $public, string $detail, ?\Throwable $previous = null): never
+    {
+        error_log("[PapyrCMS] PageWriter: {$public} — {$detail}");
+        throw new \RuntimeException("PageWriter: {$public}", 0, $previous);
+    }
+
+    /** $abs relative to the site root ("." for the root itself); never an absolute path. */
+    private function rel(string $abs): string
+    {
+        $root = rtrim($this->siteRoot, '/');
+        if ($abs === $root) {
+            return '.';
+        }
+        return str_starts_with($abs, $root . '/') ? substr($abs, strlen($root) + 1) : basename($abs);
     }
 
     /** "" for "page.php", "../" for "docs/page.php", "../../" for "a/b/page.php". */
