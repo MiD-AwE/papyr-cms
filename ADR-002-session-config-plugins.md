@@ -1,6 +1,6 @@
 # ADR-002 — Sessions, Site Config, Plugin Context & Page Writes
 
-**Status:** Proposed · **Date:** 2026-11-18 · **For:** Claude Code (implement in local XAMPP on Omarchy, phase by phase)
+**Status:** Accepted. Phases A–D implemented; E pending. · **Date:** 2026-11-18 · **For:** Claude Code (implement in local XAMPP on Omarchy, phase by phase)
 **Author intent captured by:** design conversation with Chuck (MiD-AWE)
 **Builds on:** ADR-001 (drop-in foundation, nav spine, theming)
 
@@ -325,6 +325,13 @@ their parts.
 
 ## 7. Phase E — Page writes from the map (ADR-001 §7, step 2)
 
+Phase E ships in two parts, each prerequisite its own commit:
+
+| Part | Scope |
+|---|---|
+| **E1** — groundwork, no new endpoint | `ThemeStore` (one theme writer + `defaults()`), `{siteRoot}/_templates/` loader root, section partials extracted from the demo homepage, engine starters (`landing`, `article`, `docs`, `blank`) |
+| **E2** — the writes | `_papyr/api/pages.php` (§7.1), map card actions (§7.2), Add Page form from `starter.json`, typed colour input, docs (CLAUDE.md gate table, README trash restore), `_papyr/tests/pages-test.php` |
+
 ### 7.1 `_papyr/api/pages.php`
 
 POST JSON, admin only, CSRF + same-origin via `Session`.
@@ -388,7 +395,11 @@ be born in its own colors, chosen with the HSL sliders or typed in exactly.
   (no second writer).
 
 **Theme at creation.** Add Page embeds the same HSL slider component as the theme panel
-(one component, two hosts — do not fork it), defaulting to the site default theme.
+(one component, two hosts — do not fork it). Its starting values come from
+`ThemeStore::defaults()`, which for now returns `papyr_theme_defaults()` (the engine
+defaults). The site default theme (§9, `data/themes/_site.json`) is out of this ADR; when
+it lands, it is added *inside* `ThemeStore::defaults()` (page → site → engine), so no caller
+changes. Nothing else calls `papyr_theme_defaults()` directly for starting values.
 
 **Typed values — in Add Page and in the theme panel.** Each color group gets a text field
 beside its sliders. Accepted input:
