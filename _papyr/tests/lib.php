@@ -46,6 +46,22 @@ function http(string $url, string $cookie = '', ?array $post = null): array {
     return [$status, $hdr, $body];
 }
 
+/** POST a JSON body (optionally with an Origin header); returns http()'s [status, headers, body]. */
+function httpJson(string $url, string $cookie, array $body, string $origin = ''): array {
+    $h = "Content-Type: application/json\r\nAccept: application/json\r\n"
+        . ($cookie !== '' ? "Cookie: {$cookie}\r\n" : '') . ($origin !== '' ? "Origin: {$origin}\r\n" : '');
+    $ctx = stream_context_create(['http' => ['method' => 'POST', 'header' => $h, 'content' => json_encode($body),
+        'ignore_errors' => true, 'follow_location' => 0, 'timeout' => 10]]);
+    $out = (string) @file_get_contents($url, false, $ctx);
+    $status = 0; $hdr = [];
+    foreach ($http_response_header ?? [] as $line) {
+        if (preg_match('#^HTTP/\S+ (\d+)#', $line, $m)) { $status = (int) $m[1]; continue; }
+        [$k, $v] = array_pad(explode(':', $line, 2), 2, '');
+        $hdr[strtolower(trim($k))] = trim($v);
+    }
+    return [$status, $hdr, $out];
+}
+
 function papyrJs(string $html): array {
     return preg_match('/window\.PAPYR = Object\.freeze\((\{.*?\})\);/s', $html, $m) ? (array) json_decode($m[1], true) : [];
 }
