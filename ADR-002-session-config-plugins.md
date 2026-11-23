@@ -1,6 +1,6 @@
 # ADR-002 — Sessions, Site Config, Plugin Context & Page Writes
 
-**Status:** Accepted. Phases A–D implemented; E pending. · **Date:** 2026-11-18 · **For:** Claude Code (implement in local XAMPP on Omarchy, phase by phase)
+**Status:** Accepted. Phases A–D and E1 implemented; E2 pending. · **Date:** 2026-11-18 · **For:** Claude Code (implement in local XAMPP on Omarchy, phase by phase)
 **Author intent captured by:** design conversation with Chuck (MiD-AWE)
 **Builds on:** ADR-001 (drop-in foundation, nav spine, theming)
 
@@ -542,4 +542,59 @@ Decisions the ADR left open, and deviations (CLAUDE.md wins; recorded so this st
   Model `src` follows SAL's real download path (`files/<name>.glb`), not `data/media/models/`.
 - **Map card:** unchanged. The visitor/admin split of file metadata (§7.2) belongs to Phase E.
 - **Housekeeping (§10)** map items — label prefix, FOV — not done; independent of the move.
+
+## Status — Phase E1 done (2026-11-23)
+
+| Prerequisite | Commit | Test |
+|---|---|---|
+| `ThemeStore` — the one theme writer | `a48e9b7` | `tests/themes-test.php` (26) |
+| `{siteRoot}/_templates/` loader root | `32b703b` | `tests/templates-test.php` (10) |
+| Section partials (hero, cards, features, cta) | `6a8413a` | `tests/sections-test.php` (26) |
+| Starters (landing, article, docs, blank) + `Papyr\Core\Starters` | `5d3f477` | `tests/starters-test.php` (57) |
+
+Preceded by housekeeping: ADR accepted and Phase E split (`f558a6f`), runtime-writable
+folders in UPGRADING (`f08281b`), saved page themes git-ignored except `index.json` (`aacbec3`).
+`panel-test` (57) and `plugins-test` (67) still pass; `composer dump-autoload -o` run.
+
+Decisions and deviations (CLAUDE.md wins; recorded so this stays true):
+
+- **`ThemeStore` is an instance** over the site root: `new ThemeStore($siteRoot)`, then
+  `write($pageKey, $values)` and `defaults()`. `defaults()` returns `papyr_theme_defaults()`
+  for now; §9 adds `_site.json` inside it. `sanitize()` / `isValidKey()` / `KEYS` are static.
+  `nav.php`'s render-time fallbacks still call `papyr_theme_defaults()` (those are not
+  starting values).
+- **Page keys starting with `_` are refused** by `ThemeStore`, reserving `_site.json` and
+  similar site-level files. A payload with no recognised keys is now a 400 instead of
+  writing `{}` over the page's theme.
+- **Loader roots:** `TemplateEngine::rootsFor($siteRoot, $engineDir)` / `forSite()`.
+  `_templates/` is added only when it exists, because Twig refuses missing roots. PageWriter
+  and the dashboard's Add Page field scan use it.
+- **Sections:** hero, cards and features are bands 1–3 of `index.php`, made data-driven;
+  `cta` is new (the homepage has no CTA band). `sections/list.html.twig` renders a list and
+  one `<style>` with the shared palette plus each *used* section's CSS, inlined through
+  `source()`, so a generated page needs nothing from `_papyr/` at request time. Classes are
+  `ps-`-prefixed. No web-font CDN: the homepage's fonts are named with system fallbacks.
+  Author-typed links and images become relative to the site root (`root`); unsafe schemes
+  (`javascript:` etc.) become `#`. A site overrides one section's markup or CSS under
+  `_templates/sections/`.
+- **Starters:** every starter extends `starters/_base.html.twig`. Output begins with `<?php`,
+  the `nav.php` include is guarded, and the draft marker goes right after `<body>` (where
+  E2's `demote` puts it). The manifest's field types are `text`, `textarea`, `html` and
+  `url`. A `title` field is required. `root`, `draft`, `starter`, `theme` and `sections`
+  are reserved. As with plugins, a broken site copy is logged and does **not** fall back to
+  the engine starter. `Starters::vars()` drops undeclared keys, applies defaults and
+  enforces required fields.
+- **`PageWriter::write($relPath, $vars, ?$template)`** passes `root` (`""`, `"../"`, …).
+
+Carried into E2 (found during E1, deliberately not changed yet):
+
+- `PageWriter::write()` still **overwrites** an existing file. `pages.php` `create` must
+  refuse an existing path.
+- `html` fields are written raw (as `body_content|raw` already was), so an admin can put PHP
+  in a page. That is admin-tier and consistent with today, but E2 should decide explicitly
+  whether to strip `<?`.
+- Twig sources under `_papyr/templates/` and `_templates/` are web-readable (not executable,
+  not secret). Decide in E2's docs whether to ship a deny rule alongside `_config/`'s.
+- The dashboard's existing Add Page form still renders the site's `template`. E2 replaces
+  it with the starter picker.
 
