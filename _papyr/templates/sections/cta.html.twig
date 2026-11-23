@@ -1,0 +1,24 @@
+{#
+  Section: cta — a closing call to action in the homepage's visual language
+  (new: the homepage has no CTA band of its own).
+  s: { title, text?, button?: {label, href}, secondary?: {label, href} }
+#}
+{% import 'sections/_macros.html.twig' as m %}
+<section class="ps-cta">
+  <div class="ps-cta-inner">
+    <h2 class="ps-cta-title">{{ s.title|default('') }}</h2>
+{% if s.text|default('') %}
+    <p class="ps-cta-text">{{ s.text }}</p>
+{% endif %}
+{% if s.button.label|default('') or s.secondary.label|default('') %}
+    <p class="ps-cta-actions">
+{% if s.button.label|default('') %}
+      <a class="ps-btn" href="{{ m.href(s.button.href|default('#'), root) }}">{{ s.button.label }} {{ m.icon('arrow', 16) }}</a>
+{% endif %}
+{% if s.secondary.label|default('') %}
+      <a class="ps-btn ps-btn--ghost" href="{{ m.href(s.secondary.href|default('#'), root) }}">{{ s.secondary.label }}</a>
+{% endif %}
+    </p>
+{% endif %}
+  </div>
+</section>

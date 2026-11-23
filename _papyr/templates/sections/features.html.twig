@@ -1,0 +1,15 @@
+{#
+  Section: features — extracted from the demo homepage's band 3 (feature row).
+  s: { items: [{icon?, title, text?}] }
+#}
+{% import 'sections/_macros.html.twig' as m %}
+<section class="ps-feats">
+  <ul class="ps-feat-row">
+{% for item in s.items|default([]) %}
+    <li>
+      <span class="ps-feat-icon">{{ m.icon(item.icon|default(''), 22) }}</span>
+      <span class="ps-feat-t"><strong>{{ item.title|default('') }}</strong>{{ item.text|default('') }}</span>
+    </li>
+{% endfor %}
+  </ul>
+</section>

@@ -1,0 +1,42 @@
+{#
+  Section: hero — extracted from the demo homepage's band 1.
+  s: { kicker?, kicker_sub?, headline (newline = line break; last line accented),
+       lede?, pills?: [{icon?, title, text?}], image?: {src, alt, width?, height?} }
+#}
+{% import 'sections/_macros.html.twig' as m %}
+{% set lines = s.headline|default('')|split("\n")|map(l => l|trim)|filter(l => l != '') %}
+<section class="ps-hero{{ s.image.src|default('') ? '' : ' ps-hero--solo' }}">
+  <div class="ps-hero-inner">
+    <div class="ps-hero-copy">
+{% if s.kicker|default('') %}
+      <p class="ps-kicker">{{ s.kicker }}</p>
+{% endif %}
+{% if s.kicker_sub|default('') %}
+      <p class="ps-kicker-sub">{{ s.kicker_sub }}</p>
+{% endif %}
+      <h1 class="ps-headline">
+{% for line in lines %}
+        <span{{ loop.last and loop.length > 1 ? ' class="ps-accent"' : '' }}>{{ line }}</span>
+{% endfor %}
+      </h1>
+{% if s.lede|default('') %}
+      <p class="ps-lede">{{ s.lede }}</p>
+{% endif %}
+{% if s.pills|default([]) is not empty %}
+      <ul class="ps-pills">
+{% for pill in s.pills %}
+        <li>
+          <span class="ps-pill-icon">{{ m.icon(pill.icon|default(''), 18) }}</span>
+          <span class="ps-pill-t"><strong>{{ pill.title|default('') }}</strong>{{ pill.text|default('') }}</span>
+        </li>
+{% endfor %}
+      </ul>
+{% endif %}
+    </div>
+{% if s.image.src|default('') %}
+    <div class="ps-hero-art">
+      <img src="{{ m.href(s.image.src, root) }}" alt="{{ s.image.alt|default('') }}"{% if s.image.width|default(0) %} width="{{ s.image.width }}"{% endif %}{% if s.image.height|default(0) %} height="{{ s.image.height }}"{% endif %} loading="eager" decoding="async" />
+    </div>
+{% endif %}
+  </div>
+</section>

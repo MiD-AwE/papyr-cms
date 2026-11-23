@@ -1,0 +1,36 @@
+/* section: cards */
+.ps-cards {
+  background: var(--ps-band-bg); color: var(--ps-band-ink);
+  padding: clamp(2.5rem, 5vw, 4rem) clamp(1.25rem, 5vw, 4rem);
+}
+.ps-cards-title {
+  font-family: var(--ps-display); text-align: center; font-weight: 600;
+  font-size: clamp(1rem, 2vw, 1.35rem); letter-spacing: .01em; line-height: 1.4;
+  max-width: 60rem; margin: 0 auto clamp(2rem, 4vw, 3rem); color: var(--ps-band-ink);
+}
+.ps-cards-grid {
+  max-width: 1120px; margin: 0 auto; display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 1rem; align-items: stretch;
+}
+.ps-card {
+  background: var(--ps-card-bg); border: 1px solid var(--ps-band-line); border-radius: 10px;
+  overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 1px 3px rgba(20,30,45,.06);
+}
+.ps-card-head {
+  font-family: var(--ps-display); font-weight: 700; text-transform: uppercase; letter-spacing: .1em;
+  font-size: .74rem; color: #fff; text-align: center; padding: .7rem .8rem;
+}
+.ps-tone-a { background: hsl(var(--ps-lh) calc(var(--ps-ls) * 1.1) 28%); }
+.ps-tone-b { background: var(--ps-accent2); }
+.ps-tone-c { background: var(--ps-accent); }
+.ps-card-body {
+  padding: 1.1rem 1.2rem 1.2rem; flex-grow: 1; display: flex; flex-direction: column;
+  font-family: var(--ps-display); font-size: .9rem; color: var(--ps-band-text); line-height: 1.5;
+}
+.ps-card-body p { margin: 0 0 .8rem; }
+.ps-card-list { margin: 0 0 1rem; padding-left: 1.1rem; font-family: var(--ps-mono); font-size: .82rem; line-height: 1.7; }
+.ps-card-note { font-size: .82rem; margin: auto 0 0; padding-top: .5rem; }
+.ps-cards-foot {
+  text-align: center; font-family: var(--ps-display); color: var(--ps-band-text);
+  font-size: .95rem; margin: clamp(1.5rem, 3vw, 2.2rem) auto 0;
+}

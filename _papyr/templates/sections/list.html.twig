@@ -1,0 +1,24 @@
+{#
+  Render a list of sections, then one <style> holding the shared palette plus
+  the CSS of each section type used (once each). Unknown types are skipped.
+  Generation time only: the output is plain HTML/CSS, no Twig at request time.
+  Vars: sections: [{type, ...}], root: relative prefix to the site root.
+  A site overrides any section (markup or CSS) by shipping the same name
+  under {siteRoot}/_templates/sections/.
+#}
+{% set known = ['hero', 'cards', 'features', 'cta'] %}
+{% set used = [] %}
+{% for s in sections|default([]) %}
+{% if s.type|default('') in known %}
+{% include 'sections/' ~ s.type ~ '.html.twig' with {s: s, root: root|default('')} only %}
+{% if s.type not in used %}{% set used = used|merge([s.type]) %}{% endif %}
+{% endif %}
+{% endfor %}
+{% if used is not empty %}
+<style>
+{{ source('sections/_base.css') }}
+{% for t in used %}
+{{ source('sections/' ~ t ~ '.css') }}
+{% endfor %}
+</style>
+{% endif %}

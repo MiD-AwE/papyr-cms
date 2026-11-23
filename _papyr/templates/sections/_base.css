@@ -1,0 +1,23 @@
+/* Papyr sections — shared palette (from the demo homepage). Colours derive
+   from the theme tokens, with literal fallbacks so a page still renders if
+   the engine (and its tokens) is gone. Dark bands use the theme directly;
+   light bands are tinted from the theme's background hue. */
+:root {
+  --ps-accent:  var(--accent, #2bb8d6);
+  --ps-accent2: var(--accent2, #e0672a);
+  --ps-ink:     var(--bg-deep, #0a0e14);
+  --ps-text:    var(--text, #e8edf2);
+  --ps-dim:     var(--text-dim, #9fb0bd);
+  --ps-lh: var(--bg-h, 205);
+  --ps-ls: var(--bg-s, 18%);
+  --ps-band-bg:    hsl(var(--ps-lh) calc(var(--ps-ls) * .5) 96%);
+  --ps-card-bg:    hsl(var(--ps-lh) calc(var(--ps-ls) * .4) 99%);
+  --ps-band-alt:   hsl(var(--ps-lh) calc(var(--ps-ls) * .5) 93%);
+  --ps-band-line:  hsl(var(--ps-lh) var(--ps-ls) 88%);
+  --ps-band-ink:   hsl(var(--ps-lh) calc(var(--ps-ls) * .8) 16%);
+  --ps-band-text:  hsl(var(--ps-lh) calc(var(--ps-ls) * .6) 36%);
+  --ps-display: 'Rajdhani', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --ps-mono:    'Inconsolata', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+}
+.ps-hero, .ps-cards, .ps-feats, .ps-cta { box-sizing: border-box; }
+.ps-hero *, .ps-cards *, .ps-feats *, .ps-cta * { box-sizing: border-box; }

@@ -1,0 +1,21 @@
+/* section: cta */
+.ps-cta {
+  background: var(--ps-ink); color: var(--ps-text); text-align: center;
+  padding: clamp(2.5rem, 6vw, 4.5rem) clamp(1.25rem, 5vw, 4rem);
+  border-top: 3px solid var(--ps-accent);
+}
+.ps-cta-inner { max-width: 44rem; margin: 0 auto; }
+.ps-cta-title {
+  font-family: var(--ps-display); font-weight: 700; text-transform: uppercase;
+  font-size: clamp(1.6rem, 3.6vw, 2.4rem); letter-spacing: -.01em; margin: 0 0 .8rem;
+}
+.ps-cta-text { font-family: var(--ps-display); color: var(--ps-dim); font-size: 1.05rem; line-height: 1.5; margin: 0 0 1.6rem; }
+.ps-cta-actions { display: flex; flex-wrap: wrap; gap: .8rem; justify-content: center; margin: 0; }
+.ps-btn {
+  display: inline-flex; align-items: center; gap: .45rem; text-decoration: none;
+  font-family: var(--ps-display); font-weight: 700; text-transform: uppercase; letter-spacing: .06em; font-size: .85rem;
+  padding: .7rem 1.3rem; border-radius: 6px; background: var(--ps-accent); color: var(--ps-ink);
+  border: 1px solid var(--ps-accent);
+}
+.ps-btn:hover, .ps-btn:focus-visible { filter: brightness(1.08); }
+.ps-btn--ghost { background: transparent; color: var(--ps-text); border-color: var(--ps-dim); }

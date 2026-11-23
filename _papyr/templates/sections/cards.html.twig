@@ -1,0 +1,35 @@
+{#
+  Section: cards — extracted from the demo homepage's band 2 (architecture cards).
+  s: { title?, cards: [{heading, tone? (a|b|c), body?, items?: [string], note?}], foot? }
+  tone a = theme-hued slate, b = accent2, c = accent (the homepage's three heads).
+#}
+<section class="ps-cards">
+{% if s.title|default('') %}
+  <h2 class="ps-cards-title">{{ s.title }}</h2>
+{% endif %}
+  <div class="ps-cards-grid">
+{% for card in s.cards|default([]) %}
+    <div class="ps-card">
+      <div class="ps-card-head ps-tone-{{ card.tone|default('a') in ['a', 'b', 'c'] ? card.tone|default('a') : 'a' }}">{{ card.heading|default('') }}</div>
+      <div class="ps-card-body">
+{% if card.body|default('') %}
+        <p>{{ card.body }}</p>
+{% endif %}
+{% if card.items|default([]) is not empty %}
+        <ul class="ps-card-list">
+{% for item in card.items %}
+          <li>{{ item }}</li>
+{% endfor %}
+        </ul>
+{% endif %}
+{% if card.note|default('') %}
+        <p class="ps-card-note">{{ card.note }}</p>
+{% endif %}
+      </div>
+    </div>
+{% endfor %}
+  </div>
+{% if s.foot|default('') %}
+  <p class="ps-cards-foot">{{ s.foot }}</p>
+{% endif %}
+</section>

@@ -1,0 +1,46 @@
+/* section: hero */
+.ps-hero {
+  background: var(--ps-ink); color: var(--ps-text); overflow: hidden;
+  padding: clamp(2rem, 5vw, 4.5rem) clamp(1.25rem, 5vw, 4rem) clamp(2.5rem, 5vw, 4rem);
+}
+.ps-hero-inner {
+  max-width: 1240px; margin: 0 auto; display: grid;
+  grid-template-columns: 1.05fr 1fr; gap: clamp(1.5rem, 4vw, 3.5rem); align-items: center;
+}
+.ps-hero--solo .ps-hero-inner { grid-template-columns: 1fr; max-width: 900px; }
+.ps-kicker {
+  font-family: var(--ps-display); font-weight: 700; font-size: clamp(1.4rem, 2.8vw, 2rem);
+  margin: 0; line-height: 1; color: var(--ps-accent2);
+}
+.ps-kicker-sub {
+  font-family: var(--ps-mono); text-transform: uppercase; letter-spacing: .28em;
+  font-size: .68rem; color: var(--ps-dim); margin: .35rem 0 clamp(1.4rem, 3vw, 2.2rem);
+}
+.ps-headline {
+  font-family: var(--ps-display); font-weight: 700; line-height: .98; letter-spacing: -.015em;
+  font-size: clamp(2.4rem, 6.2vw, 4.4rem); margin: 0 0 1.1rem; text-transform: uppercase;
+}
+.ps-headline span { display: block; color: var(--ps-text); }
+.ps-headline .ps-accent { color: var(--ps-accent); }
+.ps-lede {
+  font-family: var(--ps-display); font-size: clamp(1rem, 1.6vw, 1.18rem); color: var(--ps-dim);
+  max-width: 40ch; line-height: 1.5; margin: 0 0 clamp(1.6rem, 3vw, 2.2rem);
+}
+.ps-pills {
+  list-style: none; margin: 0; padding: 0; display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 1.1rem;
+}
+.ps-pills li { display: flex; flex-direction: column; gap: .5rem; }
+.ps-pill-icon { color: var(--ps-accent); }
+.ps-pill-t { font-family: var(--ps-display); font-size: .78rem; line-height: 1.35; color: var(--ps-dim); display: block; }
+.ps-pill-t strong {
+  display: block; color: var(--ps-text); font-weight: 700; letter-spacing: .02em;
+  text-transform: uppercase; font-size: .72rem; margin-bottom: .25rem;
+}
+.ps-hero-art { display: flex; justify-content: center; align-items: center; }
+.ps-hero-art img { width: 100%; max-width: 640px; height: auto; filter: drop-shadow(0 30px 60px rgba(0,0,0,.55)); }
+@media (max-width: 900px) {
+  .ps-hero-inner { grid-template-columns: 1fr; }
+  .ps-hero-art { order: -1; }
+  .ps-hero-art img { max-width: 460px; }
+}
