@@ -612,6 +612,13 @@ Found during E1 and settled before E2 (2026-11-23):
   (`token_get_all`) and refuses to write if it holds more PHP open tags than the starter
   produces with empty fields. Raw PHP in a page remains a manual-edit feature: an
   admin edits the file by hand, never through a web form.
+- **Errors name site-relative paths only.** PageWriter's failure messages (write, folder,
+  delete, trash, template render) carry the site-relative path and are safe to show as is;
+  the absolute path and Twig's own detail go to `error_log()`. Done ahead of E2 (see
+  PageWriter's `fail()`); `pages.php` returns these messages in its JSON `error` and must not
+  build its own from absolute paths. Any other exception it catches gets a generic message,
+  with the detail logged. Write permissions for the site root and page folders are in
+  UPGRADING.md.
 - **Deny rules are in place before E2** (see above); `trash` creates `_trash/` only
   through `PageWriter::trashDir()`.
 - E2's scope is otherwise as split in §7: `pages.php`, map card actions, the Add Page form

@@ -25,4 +25,19 @@ location ~ \.twig$          { deny all; }
 location ~ ^/(_papyr/plugins|_plugins)/.*\.(php|phtml|json)$ { deny all; }
 ```
 
-`data/themes/`, `data/comments/` and `_papyr/cache/` must be writable by daemon. It’s the same lesson as the secret files, and the next install shouldn’t have to rediscover it.
+Writable by the web server's group (`daemon` / `www-data` below; it's the same lesson as the
+secret files, and the next install shouldn't have to rediscover it):
+
+- `data/themes/`, `data/comments/` and `_papyr/cache/`.
+- Add Page: the site root and every folder pages are created in (e.g. `docs/`), so the engine
+  can create files there and `_trash/` at the root.
+
+```sh
+sudo chgrp daemon . docs data/themes data/comments _papyr/cache
+sudo chmod 775    . docs data/themes data/comments _papyr/cache
+```
+
+`_papyr/` and `_config/` stay **non-writable** by the web server (`755` / `750`, owned by you):
+the engine never writes its own code, and `_config/` is written only by the CLI tools. Only
+`_papyr/cache/` inside the engine is writable. If Add Page reports *could not write* or *could not
+create folder*, the message names the site-relative path; the full path is in the PHP error log.
