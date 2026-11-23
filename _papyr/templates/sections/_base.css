@@ -8,6 +8,8 @@
   --ps-ink:     var(--bg-deep, #0a0e14);
   --ps-text:    var(--text, #e8edf2);
   --ps-dim:     var(--text-dim, #9fb0bd);
+  /* the accent hue at a lightness that reads on the light bands */
+  --ps-accent-deep: hsl(var(--accent-h, 194) var(--accent-s, 100%) 34%);
   --ps-lh: var(--bg-h, 205);
   --ps-ls: var(--bg-s, 18%);
   --ps-band-bg:    hsl(var(--ps-lh) calc(var(--ps-ls) * .5) 96%);

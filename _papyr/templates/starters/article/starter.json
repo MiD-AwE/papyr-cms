@@ -1,0 +1,10 @@
+{
+    "label": "Article",
+    "description": "A readable single column: title, standfirst and body text.",
+    "fields": [
+        { "name": "title", "label": "Title", "type": "text", "required": true },
+        { "name": "meta_description", "label": "Meta description", "type": "textarea" },
+        { "name": "standfirst", "label": "Standfirst", "type": "textarea", "help": "The one or two sentences under the title." },
+        { "name": "body_content", "label": "Body", "type": "html", "help": "HTML. Written into the page as-is." }
+    ]
+}

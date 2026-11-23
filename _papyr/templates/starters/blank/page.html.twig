@@ -1,0 +1,14 @@
+{#- Starter: blank. -#}
+{% extends 'starters/_base.html.twig' %}
+{% block content %}
+<main class="pb-page">
+  <h1>{{ title }}</h1>
+{{ body_content|default('')|raw }}
+</main>
+{% endblock %}
+{% block style %}
+<style>
+  .pb-page { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; max-width: 760px; padding: 2rem 2.5rem 4rem; color: var(--text, #e8edf2); line-height: 1.7; }
+  .pb-page h1 { color: var(--accent, #2bb8d6); }
+</style>
+{% endblock %}

@@ -1,0 +1,46 @@
+{#- Starter: landing. A list of sections (see templates/sections/); empty
+    fields fall back to placeholder copy the author replaces later. -#}
+{% extends 'starters/_base.html.twig' %}
+{% block content %}
+{%- set sections = [
+  {
+    type: 'hero',
+    kicker: kicker|default(''),
+    headline: headline|default('') ?: title ~ "\nStarts here.",
+    lede: lede|default('') ?: 'One sentence that says what this page is for.',
+    pills: [
+      {icon: 'drop-in', title: 'First point', text: 'A short line about it.'},
+      {icon: 'gear', title: 'Second point', text: 'A short line about it.'},
+      {icon: 'pencil', title: 'Third point', text: 'A short line about it.'},
+    ],
+    image: {src: hero_image|default(''), alt: hero_image_alt|default('')},
+  },
+  {
+    type: 'cards',
+    title: cards_title|default('') ?: 'How it works',
+    cards: [
+      {heading: 'Step one', tone: 'a', body: 'Describe the first step.'},
+      {heading: 'Step two', tone: 'b', body: 'Describe the second step.'},
+      {heading: 'Step three', tone: 'c', body: 'Describe the result.'},
+    ],
+  },
+  {
+    type: 'features',
+    items: [
+      {icon: 'database', title: 'Feature', text: 'One line.'},
+      {icon: 'code', title: 'Feature', text: 'One line.'},
+      {icon: 'lock', title: 'Feature', text: 'One line.'},
+      {icon: 'branches', title: 'Feature', text: 'One line.'},
+    ],
+  },
+  {
+    type: 'cta',
+    title: cta_title|default('') ?: 'Ready when you are',
+    text: cta_text|default(''),
+    button: {label: cta_label|default('') ?: 'Get started', href: cta_href|default('') ?: '#'},
+  },
+] -%}
+<main class="ps-page">
+{% include 'sections/list.html.twig' with {sections: sections, root: root} only %}
+</main>
+{% endblock %}

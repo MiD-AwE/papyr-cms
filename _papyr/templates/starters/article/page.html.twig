@@ -1,0 +1,29 @@
+{#- Starter: article. -#}
+{% extends 'starters/_base.html.twig' %}
+{% block content %}
+<main class="pa-article">
+  <header class="pa-head">
+    <h1>{{ title }}</h1>
+{% if standfirst|default('') %}
+    <p class="pa-standfirst">{{ standfirst }}</p>
+{% endif %}
+  </header>
+  <div class="pa-body">
+{{ (body_content|default('') ?: '<p>Start writing here.</p>')|raw }}
+  </div>
+</main>
+{% endblock %}
+{% block style %}
+<style>
+  .pa-article { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; max-width: 42rem; margin: 0 auto; padding: clamp(2rem, 5vw, 4rem) 1.25rem 4rem; color: var(--text, #e8edf2); }
+  .pa-head { border-bottom: 1px solid var(--border, rgba(120,150,170,.22)); padding-bottom: 1.4rem; margin-bottom: 2rem; }
+  .pa-head h1 { font-size: clamp(1.8rem, 4.5vw, 2.6rem); line-height: 1.15; letter-spacing: -.01em; margin: 0 0 .8rem; color: var(--accent, #2bb8d6); }
+  .pa-standfirst { font-size: 1.15rem; line-height: 1.55; color: var(--text-dim, #9fb0bd); margin: 0; }
+  .pa-body { font-size: 1.05rem; line-height: 1.75; }
+  .pa-body p, .pa-body ul, .pa-body ol { margin: 0 0 1.1rem; }
+  .pa-body h2 { color: var(--accent, #2bb8d6); margin: 2.2rem 0 .6rem; line-height: 1.25; }
+  .pa-body a { color: var(--accent, #2bb8d6); }
+  .pa-body blockquote { margin: 1.6rem 0; padding: .2rem 0 .2rem 1.1rem; border-left: 3px solid var(--accent2, #e0672a); color: var(--text-dim, #9fb0bd); }
+  .pa-body img { max-width: 100%; height: auto; border-radius: 6px; }
+</style>
+{% endblock %}

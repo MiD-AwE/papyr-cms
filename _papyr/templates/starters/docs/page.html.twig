@@ -1,0 +1,32 @@
+{#- Starter: docs. -#}
+{% extends 'starters/_base.html.twig' %}
+{% block content %}
+<main class="pd-doc">
+  <h1>{{ title }}</h1>
+{% if summary|default('') %}
+  <p class="pd-summary">{{ summary }}</p>
+{% endif %}
+  <div class="pd-body">
+{{ (body_content|default('') ?: '<h2>Overview</h2><p>Start writing here.</p>')|raw }}
+  </div>
+</main>
+{% endblock %}
+{% block style %}
+<style>
+  .pd-doc { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; max-width: 760px; padding: 2rem 2.5rem 4rem; color: var(--text, #e8edf2); }
+  .pd-doc h1 { font-size: 1.6rem; font-weight: 700; letter-spacing: -.01em; color: var(--accent, #2bb8d6); margin: 0 0 .6rem; }
+  .pd-summary { color: var(--text-dim, #9fb0bd); margin: 0 0 1.8rem; line-height: 1.6; }
+  .pd-body { line-height: 1.7; }
+  .pd-body p, .pd-body ul, .pd-body ol { margin: 0 0 1rem; }
+  .pd-body h2 { color: var(--accent, #2bb8d6); margin: 1.8rem 0 .5rem; font-size: 1.2rem; }
+  .pd-body h3 { margin: 1.4rem 0 .4rem; font-size: 1.02rem; }
+  .pd-body a { color: var(--accent, #2bb8d6); border-bottom: 1px dotted; text-decoration: none; }
+  .pd-body code { background: var(--bg-deep, #060810); border: 1px solid var(--border, rgba(120,150,170,.22)); border-radius: 3px; padding: .05rem .35rem; font-size: .85em; }
+  .pd-body pre { background: var(--bg-deep, #060810); border: 1px solid var(--border, rgba(120,150,170,.22)); border-radius: 6px; padding: .9rem 1rem; overflow-x: auto; line-height: 1.5; }
+  .pd-body pre code { background: none; border: 0; padding: 0; }
+  .pd-body table { border-collapse: collapse; width: 100%; margin: 0 0 1.2rem; font-size: .92rem; }
+  .pd-body th, .pd-body td { border: 1px solid var(--border, rgba(120,150,170,.22)); padding: .45rem .65rem; text-align: left; vertical-align: top; }
+  .pd-body th { color: var(--accent, #2bb8d6); }
+  .pd-body .note { border-left: 3px solid var(--accent, #2bb8d6); padding: .5rem .9rem; background: var(--card-bg, rgba(255,255,255,.03)); }
+</style>
+{% endblock %}

@@ -29,20 +29,28 @@ class PageWriter
     }
 
     /*
-     * Render the site template with $vars and write the result to
-     * $siteRoot/$relPath. Creates intermediate directories as needed.
-     * Forces a manifest re-scan so Scanner can see the new file, then
-     * calls markManaged() to flag it as CMS-owned.
+     * Render a template with $vars and write the result to $siteRoot/$relPath.
+     * $template defaults to the site's configured template; pass a starter's
+     * template (Starters::get()['template']) to render that instead.
+     * Creates intermediate directories as needed. Forces a manifest re-scan
+     * so Scanner can see the new file, then calls markManaged() to flag it
+     * as CMS-owned.
+     *
+     * The template also receives `root`: the relative prefix from the new
+     * file back to the site root ("" at the top level, "../" one folder
+     * down), so links written into the page work on any base path, with or
+     * without the engine.
      *
      * Returns the absolute path of the written file.
      * Throws \InvalidArgumentException on unsafe path.
-     * Throws \RuntimeException on write failure.
+     * Throws \RuntimeException on render or write failure.
      */
-    public function write(string $relPath, array $vars): string
+    public function write(string $relPath, array $vars, ?string $template = null): string
     {
         $this->guardPath($relPath);
 
-        $output  = $this->engine->render($this->template, $vars);
+        $vars['root'] = self::rootPrefix($relPath);
+        $output  = $this->engine->render($template ?? $this->template, $vars);
         $absPath = $this->siteRoot . '/' . $relPath;
 
         $dir = dirname($absPath);
@@ -96,6 +104,12 @@ class PageWriter
     public function getTemplateVarNames(): array
     {
         return $this->engine->extractVarNames($this->template);
+    }
+
+    /** "" for "page.php", "../" for "docs/page.php", "../../" for "a/b/page.php". */
+    public static function rootPrefix(string $relPath): string
+    {
+        return str_repeat('../', substr_count(trim($relPath, '/'), '/'));
     }
 
     /*

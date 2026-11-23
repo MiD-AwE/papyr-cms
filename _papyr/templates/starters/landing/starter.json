@@ -1,0 +1,18 @@
+{
+    "label": "Landing",
+    "description": "Hero, cards, a feature row and a call to action: the demo homepage's building blocks. Placeholder copy fills anything left empty; edit the file afterwards.",
+    "fields": [
+        { "name": "title", "label": "Page title", "type": "text", "required": true },
+        { "name": "meta_description", "label": "Meta description", "type": "textarea" },
+        { "name": "kicker", "label": "Kicker", "type": "text", "help": "Small line above the headline, e.g. your product name." },
+        { "name": "headline", "label": "Headline", "type": "textarea", "help": "One line per row; the last row is shown in the accent colour." },
+        { "name": "lede", "label": "Lede", "type": "textarea" },
+        { "name": "hero_image", "label": "Hero image", "type": "url", "help": "Site-relative (assets/img/…) or a full URL. Leave empty for a text-only hero." },
+        { "name": "hero_image_alt", "label": "Hero image description", "type": "text" },
+        { "name": "cards_title", "label": "Cards heading", "type": "text" },
+        { "name": "cta_title", "label": "Call to action heading", "type": "text" },
+        { "name": "cta_text", "label": "Call to action text", "type": "textarea" },
+        { "name": "cta_label", "label": "Button label", "type": "text" },
+        { "name": "cta_href", "label": "Button link", "type": "url", "help": "Site-relative (docs/overview.php) or a full URL." }
+    ]
+}

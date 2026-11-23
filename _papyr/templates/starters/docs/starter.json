@@ -1,0 +1,10 @@
+{
+    "label": "Docs",
+    "description": "Documentation page: title, summary and body, styled for code, tables and notes.",
+    "fields": [
+        { "name": "title", "label": "Title", "type": "text", "required": true },
+        { "name": "meta_description", "label": "Meta description", "type": "textarea" },
+        { "name": "summary", "label": "Summary", "type": "textarea" },
+        { "name": "body_content", "label": "Body", "type": "html", "help": "HTML. Written into the page as-is." }
+    ]
+}

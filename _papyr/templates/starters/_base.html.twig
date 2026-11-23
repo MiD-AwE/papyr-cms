@@ -1,0 +1,32 @@
+{#- Shared page shell for starters (ADR-002 §7.3). Rendered once by PageWriter;
+    the output is a plain PHP page with no runtime dependency on any starter.
+    Must begin with "<?php" — any byte before it would start output before the
+    session. Vars: title, meta_description, draft (bool), root, plus blocks
+    content and style. -#}
+<?php declare(strict_types=1);
+/* Boot the Papyr spine before any output (session, roles, theme); the nav renders after <body>.
+   Guarded: without nav.php or _papyr/ this page still renders as plain PHP. */
+define('PAPYR_DEFER_NAV', true);
+for ($_d = __DIR__; !file_exists($_d . '/nav.php') && dirname($_d) !== $_d; $_d = dirname($_d));
+if (file_exists($_d . '/nav.php')) { require_once $_d . '/nav.php'; }
+unset($_d);
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ title }}</title>
+{% if meta_description|default('') %}
+  <meta name="description" content="{{ meta_description }}" />
+{% endif %}
+</head>
+<body>
+{% if draft|default(false) %}
+<!-- papyr:draft -->
+{% endif %}
+<?php if (function_exists('papyr_nav')) { papyr_nav(); } ?>
+{% block content %}{% endblock %}
+{% block style %}{% endblock %}
+</body>
+</html>

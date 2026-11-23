@@ -1,0 +1,9 @@
+{
+    "label": "Blank",
+    "description": "Title and body only, unstyled beyond the site theme.",
+    "fields": [
+        { "name": "title", "label": "Title", "type": "text", "required": true },
+        { "name": "meta_description", "label": "Meta description", "type": "textarea" },
+        { "name": "body_content", "label": "Body", "type": "html", "help": "HTML. Written into the page as-is." }
+    ]
+}

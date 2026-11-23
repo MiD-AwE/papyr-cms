@@ -22,7 +22,7 @@
 }
 .ps-tone-a { background: hsl(var(--ps-lh) calc(var(--ps-ls) * 1.1) 28%); }
 .ps-tone-b { background: var(--ps-accent2); }
-.ps-tone-c { background: var(--ps-accent); }
+.ps-tone-c { background: var(--ps-accent); color: var(--ps-ink); }   /* accent is light-on-dark: dark text */
 .ps-card-body {
   padding: 1.1rem 1.2rem 1.2rem; flex-grow: 1; display: flex; flex-direction: column;
   font-family: var(--ps-display); font-size: .9rem; color: var(--ps-band-text); line-height: 1.5;
