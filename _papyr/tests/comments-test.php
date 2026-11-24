@@ -17,11 +17,20 @@ declare(strict_types=1);
  *   - visitor now sees the count; lock returns the member to visitor
  *   - admin: sees the thread and Remove, API reports admin, delete empties the thread
  *   - an unwritable data/comments/ gives a clear 500, not a PHP error
+ *   - invitation: one per thread for visitors (default wording, "ask the owner"
+ *     with no link), never for members or admins; sites.json comments.prompt /
+ *     invite_link / invite_label override it, escaped; a site path gets the
+ *     base path; a javascript: link is dropped; no invite password → count only
+ *   - §8: with _papyr/ removed, the test page and the real about.php (which
+ *     calls papyr_comments() unguarded) render as plain PHP, no fatal
  */
 
 if (PHP_SAPI !== 'cli') { exit('CLI only.'); }
 
 require __DIR__ . '/lib.php';
+require dirname(__DIR__) . '/vendor/autoload.php';
+
+use Papyr\Core\Comments;
 
 [$tmp, $site, $base] = buildSite('test-admin-pass');
 ini_set('error_log', "$tmp/cli-errors.log");
@@ -39,6 +48,13 @@ $unlock = "$U/_papyr/api/unlock.php";
 $store  = "$site/data/comments/comments-check.json";
 $cookieOf = fn(array $hd): string => preg_match('/^(PAPYR_\w+)=([^;]+)/mi', $hd['set-cookie'] ?? '', $m) ? "$m[1]=$m[2]" : '';
 $json = fn(array $r): array => (array) json_decode($r[2], true);
+copy(dirname(__DIR__, 2) . '/about.php', "$site/about.php");
+$conf = json_decode((string) file_get_contents("$site/_config/sites.json"), true);
+$setComments = function (?array $c) use ($site, $conf): void {
+    $conf['sites']['t']['comments'] = $c;
+    if ($c === null) { unset($conf['sites']['t']['comments']); }
+    file_put_contents("$site/_config/sites.json", json_encode($conf));
+};
 
 try {
     cliTool($site, 'set-invite-pass.php', 'test-invite-pass');
@@ -51,6 +67,9 @@ try {
     check('two locked blocks with an unlock link', substr_count($html, 'class="pc-unlock-link"') === 2);
     check('no thread or form for a visitor', !str_contains($html, 'class="pc-form"') && !str_contains($html, 'class="pc-list"'));
     check('unlock form in the panel', str_contains($html, 'id="tp-invite"'));
+    check('one invitation per thread', substr_count($html, 'class="pc-invite"') === 2);
+    check('default prompt with zero comments', substr_count($html, Comments::DEFAULT_PROMPT) === 2);
+    check('no link configured → ask the owner', substr_count($html, Comments::DEFAULT_NO_LINK) === 2 && !str_contains($html, 'class="pc-invite-link"'));
     check('draft page kept out of the nav', !preg_match('/<a[^>]+comments-check\.php/', $html));
     [$st] = http("$api?page=comments-check&block=first", $visitor);
     check('API read refused for a visitor', $st === 403, "HTTP $st");
@@ -69,6 +88,7 @@ try {
     $csrf = papyrJs($html)['csrf'] ?? '';
     check('thread + form shown', substr_count($html, 'class="pc-form"') === 2 && !str_contains($html, 'class="pc-unlock-link"'));
     check('no Remove for a member', !str_contains($html, 'class="pc-del"'));
+    check('no invitation for a member', !str_contains($html, 'class="pc-invite"'));
     check('member has a CSRF token', $csrf !== '');
     $post = ['action' => 'add', 'page' => 'comments-check', 'block' => 'first', 'name' => 'Ada', 'body' => 'Hello <b>there</b>'];
     $r = httpJson($api, $member, $post, $origin);
@@ -92,7 +112,8 @@ try {
 
     echo "visitor again\n";
     [, , $html] = http($page);
-    check('visitor sees the count only', str_contains($html, '1 comment · Unlock to read') && !str_contains($html, 'Hello'));
+    check('visitor sees the count, not the thread', str_contains($html, '<span class="pc-count">1 comment · </span>') && !str_contains($html, 'Hello'));
+    check('still one invitation per thread', substr_count($html, 'class="pc-invite"') === 2);
     $r = httpJson($unlock, $member, ['action' => 'lock'], $origin);
     check('lock → no longer a member', $r[0] === 200 && ($json($r)['member'] ?? true) === false, $r[2]);
     [$st] = http("$api?page=comments-check&block=first", $member);
@@ -104,6 +125,7 @@ try {
     $acsrf = papyrJs($html)['csrf'] ?? '';
     check('admin sees the thread without unlocking', str_contains($html, 'Hello &lt;b&gt;') && !str_contains($html, 'class="pc-unlock-link"'));
     check('admin gets Remove', str_contains($html, 'class="pc-del"'));
+    check('no invitation for an admin', !str_contains($html, 'class="pc-invite"'));
     $r = http("$api?page=comments-check&block=first", $admin);
     check('API reports admin', ($json($r)['admin'] ?? false) === true && count($json($r)['comments'] ?? []) === 1, $r[2]);
     $r = httpJson($api, $admin, ['action' => 'delete', 'page' => 'comments-check', 'block' => 'first', 'id' => $id, 'csrf' => $acsrf], $origin);
@@ -117,6 +139,36 @@ try {
     chmod("$site/data/comments", 0775);
     check('clear 500 naming data/comments/', $r[0] === 500 && str_contains($json($r)['error'] ?? '', 'data/comments/ writable'), $r[2]);
     check('no absolute path in the error', !str_contains($r[2], $tmp));
+
+    echo "invitation from sites.json\n";
+    $setComments(['prompt' => 'Talk to <us>.', 'invite_link' => 'mailto:owner@example.com', 'invite_label' => 'Email for an invite']);
+    [, , $html] = http($page);
+    check('custom prompt, escaped', substr_count($html, 'Talk to &lt;us&gt;.') === 2);
+    check('custom link and label', substr_count($html, '<a class="pc-invite-link" href="mailto:owner@example.com">Email for an invite</a>') === 2);
+    $setComments(['invite_link' => 'contact.php']);
+    [, , $html] = http($page);
+    check('site path gets the base path', str_contains($html, 'href="/' . $base . '/contact.php"'));
+    check('default prompt and label kept', str_contains($html, Comments::DEFAULT_PROMPT) && str_contains($html, Comments::DEFAULT_INVITE_LABEL));
+    $setComments(['invite_link' => 'javascript:alert(1)']);
+    [, , $html] = http($page);
+    check('javascript: link dropped', !str_contains($html, 'javascript:alert') && str_contains($html, Comments::DEFAULT_NO_LINK));
+    $setComments(null);
+    rename("$site/_config/invite.php", "$tmp/invite.off");
+    [, , $html] = http($page);
+    check('no invite password → no invitation, no unlock', !str_contains($html, 'class="pc-invite"') && !str_contains($html, 'class="pc-unlock-link"'));
+    rename("$tmp/invite.off", "$site/_config/invite.php");
+
+    echo "§8: engine removed\n";
+    [$st, , $html] = http("$U/about.php");
+    check('about.php renders with the engine', $st === 200 && substr_count($html, 'class="pc-invite"') === 3, "HTTP $st");
+    rename("$site/_papyr", "$site/_papyr.off");
+    foreach (['comments-check.php', 'about.php'] as $f) {
+        [$st, , $html] = http("$U/$f");
+        check("$f renders as plain PHP", $st === 200 && str_contains($html, '</html>') && !str_contains($html, 'pc-thread'), "HTTP $st");
+        check("$f: no PHP error in the page", !preg_match('/(Fatal error|Warning|Uncaught)/', $html));
+    }
+    check('no fatal in the log', !preg_match('/fatal/i', (string) @file_get_contents("$tmp/php-errors.log")));
+    rename("$site/_papyr.off", "$site/_papyr");
 } catch (\Throwable $e) {
     check('no exception', false, get_class($e) . ': ' . $e->getMessage());
 } finally {

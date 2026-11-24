@@ -4,14 +4,15 @@ declare(strict_types=1);
 /*
  * PapyrCMS comments partial — invite-only discussion threads, one per block.
  *
- * nav.php includes this file, so every page that includes nav.php can call:
+ * Pages call papyr_comments('acoustic-larvicide') inside any block; nav.php
+ * defines that function (a no-op without the engine) and calls
+ * papyr_comments_render() here. The argument is the block's id (letters,
+ * digits, - and _), unique on the page.
  *
- *     <?php papyr_comments('acoustic-larvicide'); ?>
- *
- * inside any block. The argument is the block's id (letters, digits, - and _).
- *
- * Locked visitors see only a count ("4 comments · Unlock to read"); the
- * thread HTML is never sent to them. Unlocked participants see the thread
+ * Locked visitors see one short invitation per thread (sites.json
+ * "comments": prompt / invite_link / invite_label, see Comments::invitation())
+ * with the count and an unlock button; the thread HTML is never sent to them.
+ * Without an invite password configured they see only the count. Unlocked participants see the thread
  * and a reply form. Admins also get Remove buttons.
  *
  * Reads request state from the read-only Papyr\Core\Context (papyr()), not
@@ -21,9 +22,17 @@ declare(strict_types=1);
 use Papyr\Core\Comments;
 use Papyr\Core\MemberAuth;
 
-if (!function_exists('papyr_comments')) {
+if (!function_exists('papyr_comments_render')) {
 
-    function papyr_comments(string $block): void
+    // Older nav.php spines (before the stub moved there) still get papyr_comments().
+    if (!function_exists('papyr_comments')) {
+        function papyr_comments(string $block): void
+        {
+            papyr_comments_render($block);
+        }
+    }
+
+    function papyr_comments_render(string $block): void
     {
         $p       = \Papyr\Core\Context::current();
         $pageKey = $p->page['key'];
@@ -42,12 +51,9 @@ if (!function_exists('papyr_comments')) {
         $store = new Comments(\Papyr\Core\Session::siteRoot());
         $h     = fn(string $s): string => htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
 
-        /* ---------- locked: count only ---------- */
+        /* ---------- locked: invitation + count ---------- */
         if (!$p->isMember()) {
             $n = $store->counts($pageKey)[$block] ?? 0;
-            $label = $n > 0
-                ? $n . ' comment' . ($n === 1 ? '' : 's') . ' · Unlock to read…'
-                : 'Join the discussion · Unlock to comment…';
             if (!$p->site['invites']) {
                 // Invitations not set up yet: show the count, offer no unlock.
                 if ($n > 0) {
@@ -56,8 +62,15 @@ if (!function_exists('papyr_comments')) {
                 }
                 return;
             }
-            echo '<div class="pc-thread pc-locked"><button type="button" class="pc-unlock-link" onclick="papyrOpenUnlock()">'
-                . '<span aria-hidden="true">💬</span> ' . $h($label) . '</button></div>';
+            $inv  = $p->site['comments'] ?? Comments::invitation([]);
+            $how  = $inv['link'] !== ''
+                ? '<a class="pc-invite-link" href="' . $h($inv['linkIsSite'] ? $p->url($inv['link']) : $inv['link']) . '">'
+                    . $h($inv['linkLabel']) . '</a>'
+                : $h($inv['noLinkText']);
+            $count = $n > 0 ? $n . ' comment' . ($n === 1 ? '' : 's') . ' · ' : '';
+            echo '<div class="pc-thread pc-locked"><p class="pc-invite"><span aria-hidden="true">💬</span> '
+                . '<span class="pc-count">' . $h($count) . '</span>' . $h($inv['prompt']) . ' ' . $how
+                . '<br><button type="button" class="pc-unlock-link" onclick="papyrOpenUnlock()">Have an invite? Unlock</button></p></div>';
             return;
         }
 
@@ -114,6 +127,10 @@ if (!function_exists('papyr_comments')) {
 .pc-thread { margin-top: 1rem; padding-top: .8rem; border-top: 1px dashed var(--border-bright); font-size: .92rem; }
 .pc-unlock-link, .pc-more { background: none; border: 0; padding: 0; font: inherit; color: var(--accent); cursor: pointer; text-align: left; }
 .pc-unlock-link:hover, .pc-more:hover { text-decoration: underline; }
+.pc-invite { margin: 0; font-size: .85rem; line-height: 1.45; color: var(--text-dim); }
+.pc-invite .pc-unlock-link { margin-top: .3rem; }
+.pc-invite .pc-count { color: var(--text); }
+.pc-invite-link { color: var(--accent); }
 .pc-head { margin: 0 0 .5rem; font-size: .8rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-dim); }
 .pc-more { font-size: .85rem; margin-bottom: .5rem; }
 .pc-list { list-style: none; margin: 0 0 .7rem; padding: 0; display: grid; gap: .6rem; }

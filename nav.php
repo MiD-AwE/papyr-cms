@@ -27,6 +27,7 @@ declare(strict_types=1);
  */
 
 use Papyr\Core\Context;
+use Papyr\Core\Comments;
 use Papyr\Core\MemberAuth;
 use Papyr\Core\NavBuilder;
 use Papyr\Core\Session;
@@ -99,6 +100,7 @@ Context::boot(new Context(
         'url'           => (string) ($_papyrSiteConf['url'] ?? ''),
         'engineVersion' => Version::ENGINE,
         'invites'       => MemberAuth::configured(),
+        'comments'      => Comments::invitation($_papyrSiteConf),
     ],
     page: [
         'key'        => (string) $_papyrPageKey,
@@ -189,6 +191,21 @@ function papyr_plugin(string $name, array $options = []): void
         return;
     }
     Papyr\Core\Plugins::render($name, Context::current(), $options);
+}
+
+/**
+ * Render a comment thread where called — one per block, unique id per page:
+ *   <?php papyr_comments('pricing'); ?>
+ * Renders nothing (never a fatal) when the engine is missing, so pages may
+ * call it unguarded. The implementation lives in the comments partial.
+ */
+function papyr_comments(string $block): void
+{
+    if (!class_exists(Context::class) || !Context::current()->ready) {
+        return;
+    }
+    include_once __DIR__ . '/_papyr/templates/partials/comments.php';
+    papyr_comments_render($block);
 }
 
 /**
