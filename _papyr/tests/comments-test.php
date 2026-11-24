@@ -5,7 +5,7 @@ declare(strict_types=1);
  * Invite-only comments, end to end under a real Apache (deny rules apply).
  * Run:  php _papyr/tests/comments-test.php
  * Needs XAMPP's httpd + mod_php (/opt/lampp, or PAPYR_TEST_LAMPP); prints SKIP
- * and exits 0 when Apache is absent. Serves the site's own comments-check.php.
+ * and exits 0 when Apache is absent. Builds its own draft page with two blocks.
  *
  * Covers:
  *   - visitor: locked count + unlock link per block, no thread or form; API 403
@@ -25,7 +25,9 @@ require __DIR__ . '/lib.php';
 
 [$tmp, $site, $base] = buildSite('test-admin-pass');
 ini_set('error_log', "$tmp/cli-errors.log");
-copy(dirname(__DIR__, 2) . '/comments-check.php', "$site/comments-check.php");
+// A draft page with two comment blocks; it boots first, like a real page.
+file_put_contents("$site/comments-check.php", str_replace('<body>', "<body>\n<!-- papyr:draft -->", bootPage(
+    "<h1>Comments check</h1>\n<?php papyr_comments('first'); ?>\n<?php papyr_comments('second'); ?>")));
 [$port, $skip] = startApache($tmp);
 if ($skip !== null) { echo "SKIP  $skip\n"; rmTree($tmp); exit(0); }
 
