@@ -17,10 +17,9 @@ declare(strict_types=1);
  *   - visitor now sees the count; lock returns the member to visitor
  *   - admin: sees the thread and Remove, API reports admin, delete empties the thread
  *   - an unwritable data/comments/ gives a clear 500, not a PHP error
- *   - invitation: one per thread for visitors (default wording, "ask the owner"
- *     with no link), never for members or admins; sites.json comments.prompt /
- *     invite_link / invite_label override it, escaped; a site path gets the
- *     base path; a javascript: link is dropped; no invite password → count only
+ *   - invitation: one per thread for visitors (default wording + "ask the site
+ *     owner"), never for members or admins; sites.json comments.prompt overrides
+ *     the wording, escaped; no invite password → count only
  *   - §8: with _papyr/ removed, the test page and the real about.php (which
  *     calls papyr_comments() unguarded) render as plain PHP, no fatal
  */
@@ -69,7 +68,7 @@ try {
     check('unlock form in the panel', str_contains($html, 'id="tp-invite"'));
     check('one invitation per thread', substr_count($html, 'class="pc-invite"') === 2);
     check('default prompt with zero comments', substr_count($html, Comments::DEFAULT_PROMPT) === 2);
-    check('no link configured → ask the owner', substr_count($html, Comments::DEFAULT_NO_LINK) === 2 && !str_contains($html, 'class="pc-invite-link"'));
+    check('ends with "ask the site owner"', substr_count($html, Comments::DEFAULT_NO_LINK) === 2 && !str_contains($html, '<a class="pc-'));
     check('draft page kept out of the nav', !preg_match('/<a[^>]+comments-check\.php/', $html));
     [$st] = http("$api?page=comments-check&block=first", $visitor);
     check('API read refused for a visitor', $st === 403, "HTTP $st");
@@ -141,17 +140,10 @@ try {
     check('no absolute path in the error', !str_contains($r[2], $tmp));
 
     echo "invitation from sites.json\n";
-    $setComments(['prompt' => 'Talk to <us>.', 'invite_link' => 'mailto:owner@example.com', 'invite_label' => 'Email for an invite']);
+    $setComments(['prompt' => 'Talk to <us>.', 'invite_link' => 'mailto:owner@example.com']);
     [, , $html] = http($page);
     check('custom prompt, escaped', substr_count($html, 'Talk to &lt;us&gt;.') === 2);
-    check('custom link and label', substr_count($html, '<a class="pc-invite-link" href="mailto:owner@example.com">Email for an invite</a>') === 2);
-    $setComments(['invite_link' => 'contact.php']);
-    [, , $html] = http($page);
-    check('site path gets the base path', str_contains($html, 'href="/' . $base . '/contact.php"'));
-    check('default prompt and label kept', str_contains($html, Comments::DEFAULT_PROMPT) && str_contains($html, Comments::DEFAULT_INVITE_LABEL));
-    $setComments(['invite_link' => 'javascript:alert(1)']);
-    [, , $html] = http($page);
-    check('javascript: link dropped', !str_contains($html, 'javascript:alert') && str_contains($html, Comments::DEFAULT_NO_LINK));
+    check('invite_link ignored (left out for now)', !str_contains($html, 'owner@example.com') && substr_count($html, Comments::DEFAULT_NO_LINK) === 2);
     $setComments(null);
     rename("$site/_config/invite.php", "$tmp/invite.off");
     [, , $html] = http($page);

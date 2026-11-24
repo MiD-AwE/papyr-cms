@@ -27,7 +27,7 @@
     "sites": {
         "mid_awe": {
             "root": "..",
-            "url": "http://localhost:88/papyr-cms/",
+            "url": "http://localhost/papyr-cms/",
             "label": "papyrCMS (local dev)",
             "template": "sites/papyr-cms/page.html.twig",
             "shared_partials": ["nav.php", "footer.php"],
@@ -35,9 +35,7 @@
             "ignore_dirs": ["vendor", "node_modules", ".git", "assets", "css", "js", "img", "images", "fonts", "data", "BKUP", "src"],
             "social": {},
             "comments": {
-                "prompt": "Join the conversation. Comments are open to invited readers.",
-                "invite_link": "mailto:you@example.com",
-                "invite_label": "Request an invite"
+                "prompt": "Join the conversation. Comments are open to invited readers."
             }
         }
     }

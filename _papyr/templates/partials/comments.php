@@ -10,7 +10,7 @@ declare(strict_types=1);
  * digits, - and _), unique on the page.
  *
  * Locked visitors see one short invitation per thread (sites.json
- * "comments": prompt / invite_link / invite_label, see Comments::invitation())
+ * "comments": { "prompt" }, see Comments::invitation())
  * with the count and an unlock button; the thread HTML is never sent to them.
  * Without an invite password configured they see only the count. Unlocked participants see the thread
  * and a reply form. Admins also get Remove buttons.
@@ -62,14 +62,10 @@ if (!function_exists('papyr_comments_render')) {
                 }
                 return;
             }
-            $inv  = $p->site['comments'] ?? Comments::invitation([]);
-            $how  = $inv['link'] !== ''
-                ? '<a class="pc-invite-link" href="' . $h($inv['linkIsSite'] ? $p->url($inv['link']) : $inv['link']) . '">'
-                    . $h($inv['linkLabel']) . '</a>'
-                : $h($inv['noLinkText']);
+            $inv   = $p->site['comments'] ?? Comments::invitation([]);
             $count = $n > 0 ? $n . ' comment' . ($n === 1 ? '' : 's') . ' · ' : '';
             echo '<div class="pc-thread pc-locked"><p class="pc-invite"><span aria-hidden="true">💬</span> '
-                . '<span class="pc-count">' . $h($count) . '</span>' . $h($inv['prompt']) . ' ' . $how
+                . '<span class="pc-count">' . $h($count) . '</span>' . $h($inv['prompt']) . ' ' . $h($inv['howTo'])
                 . '<br><button type="button" class="pc-unlock-link" onclick="papyrOpenUnlock()">Have an invite? Unlock</button></p></div>';
             return;
         }
@@ -130,7 +126,6 @@ if (!function_exists('papyr_comments_render')) {
 .pc-invite { margin: 0; font-size: .85rem; line-height: 1.45; color: var(--text-dim); }
 .pc-invite .pc-unlock-link { margin-top: .3rem; }
 .pc-invite .pc-count { color: var(--text); }
-.pc-invite-link { color: var(--accent); }
 .pc-head { margin: 0 0 .5rem; font-size: .8rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-dim); }
 .pc-more { font-size: .85rem; margin-bottom: .5rem; }
 .pc-list { list-style: none; margin: 0 0 .7rem; padding: 0; display: grid; gap: .6rem; }

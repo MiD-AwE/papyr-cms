@@ -335,8 +335,8 @@ requests — a POST can always be sent without going through the UI.
 
 ## Environment
 
-- **OS:** PopOS (Ubuntu-based), all updates current
-- **Local dev server:** XAMPP (`/opt/lampp`), served at `http://localhost:88/papyr-cms/`
+- **OS:** Omarchy (Arch-based), full-time since late 2026 (was PopOS)
+- **Local dev server:** XAMPP (`/opt/lampp`), served at `http://localhost/papyr-cms/` (port 80; the old `:88` was a PopOS-era workaround)
 - **Production:** `papyrcms.mid-awe.com` — vhost rooted at the site (no path prefix)
 - **Local AI:** Ollama at `http://localhost:11434`, model `gemma3:latest`; also a `hermes` openai_compat channel at `127.0.0.1:7860`
 - **Cloud AI:** Cerebras API, key in env var `CEREBRAS_API_KEY`

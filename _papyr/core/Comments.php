@@ -26,44 +26,21 @@ class Comments
     }
 
     public const DEFAULT_PROMPT = 'Join the conversation. Comments are open to invited readers.';
-    public const DEFAULT_INVITE_LABEL = 'Request an invite';
     public const DEFAULT_NO_LINK = 'Ask the site owner for an invite.';
 
     /**
-     * The invitation shown to locked visitors, from the site entry's "comments"
-     * block in sites.json:
-     *   "comments": { "prompt": "…", "invite_link": "mailto:me@example.com", "invite_label": "…" }
-     * Every key is optional. invite_link may be http(s)://, mailto:, or a
-     * site-relative path ("contact.php", "/contact.php"); anything else is
-     * dropped and logged. Returns prompt, link ('' when none), linkLabel,
-     * linkIsSite (true when link is site-relative), noLinkText.
+     * The invitation shown to locked visitors. The prompt comes from the site
+     * entry's "comments" block in sites.json ("comments": { "prompt": "…" });
+     * it is optional. howTo is fixed for now: an invite-request form may
+     * replace it later.
      */
     public static function invitation(array $siteConf): array
     {
-        $c   = is_array($siteConf['comments'] ?? null) ? $siteConf['comments'] : [];
-        $str = static fn(string $k, string $d): string =>
-            is_string($c[$k] ?? null) && trim($c[$k]) !== '' ? trim(mb_substr($c[$k], 0, 300)) : $d;
-
-        $link = $str('invite_link', '');
-        $site = false;
-        if ($link !== '') {
-            if (preg_match('#^(https?://|mailto:)#i', $link)) {
-                // absolute: kept as is
-            } elseif (!preg_match('#^[a-z][a-z0-9+.-]*:|^//#i', $link) && !str_contains($link, '..')) {
-                $site = true;
-                $link = ltrim($link, '/');
-            } else {
-                error_log("[PapyrCMS] comments.invite_link ignored: only http(s)://, mailto: or a site path is allowed — {$link}");
-                $link = '';
-            }
-        }
-        return [
-            'prompt'     => $str('prompt', self::DEFAULT_PROMPT),
-            'link'       => $link,
-            'linkLabel'  => $str('invite_label', self::DEFAULT_INVITE_LABEL),
-            'linkIsSite' => $site,
-            'noLinkText' => self::DEFAULT_NO_LINK,
-        ];
+        $c = is_array($siteConf['comments'] ?? null) ? $siteConf['comments'] : [];
+        $prompt = is_string($c['prompt'] ?? null) && trim($c['prompt']) !== ''
+            ? trim(mb_substr($c['prompt'], 0, 300))
+            : self::DEFAULT_PROMPT;
+        return ['prompt' => $prompt, 'howTo' => self::DEFAULT_NO_LINK];
     }
 
     public static function validKey(string $s): bool
