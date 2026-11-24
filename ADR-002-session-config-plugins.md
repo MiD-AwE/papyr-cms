@@ -623,3 +623,37 @@ Found during E1 and settled before E2 (2026-11-23):
   through `PageWriter::trashDir()`.
 - E2's scope is otherwise as split in §7: `pages.php`, map card actions, the Add Page form
   from `starter.json`, typed colour input, docs and `pages-test.php`.
+
+## Comments invitation and invite requests (2026-11-24)
+
+**Done** (`7a62997`, `382e08d`):
+- `papyr_comments()` is defined in `nav.php`, a no-op without the engine (like
+  `papyr_plugin()`); the partial's implementation is `papyr_comments_render()`. Pages call it
+  unguarded. `comments-test.php` covers the §8 engine-removed check, including the real
+  `about.php`.
+- Locked visitors see one short invitation per thread, even with zero comments:
+  prompt (sites.json `comments.prompt`, default "Join the conversation. Comments are open
+  to invited readers.") + "Ask the site owner for an invite." + an unlock button. Never shown
+  to members or admins; with no invite password set, only the count shows.
+- `invite_link` was tried and dropped: the request form below replaces it.
+
+**Next, after E2 — invite request form.** Decisions:
+- **Off by default.** While off, or with no contact email set, the invitation stays as it is
+  now ("Ask the site owner for an invite.").
+- **Setting from the admin dashboard:** contact email + enabled flag, saved to
+  `data/settings/comments.json` (site-owned, web-writable, `DenyRule` whole folder; `_config/`
+  stays CLI-written only). Admin + CSRF + same-origin, like every other admin write.
+- **The contact email never leaves the server:** not in HTML, `window.PAPYR` or `papyr()`.
+  Context carries only `requests: true|false`.
+- **Visitor fields:** their email (required, `FILTER_VALIDATE_EMAIL`, max 254) and an
+  optional note (max ~500 characters). A hidden honeypot field; a per-IP throttle like
+  `unlock.php`; CSRF + same-origin; open to visitors (that is the point).
+- **Delivery: save, then email.** Every request is appended to `data/invites/requests.json`
+  (deny rule) and listed in the admin dashboard, with a delete action. Then `mail()` to the
+  fixed contact address with a fixed subject; the body is plain text. The visitor's address
+  goes only in `Reply-To`, after validation and a CR/LF check; nothing visitor-supplied goes
+  in any other header. A failed `mail()` is logged and the visitor still sees success: the
+  request is saved.
+- **Endpoint:** `_papyr/api/invite-request.php`. Tests: `comments-test.php` (or its own
+  suite) under Apache: hidden address, honeypot, throttle, CSRF/origin, stored file 403 over
+  the web, admin listing, mail failure still saves.
