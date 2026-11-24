@@ -327,10 +327,10 @@ their parts.
 
 Phase E ships in two parts, each prerequisite its own commit:
 
-| Part | Scope |
-|---|---|
+| Part                                 | Scope                                                                                                                                                                                            |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **E1** — groundwork, no new endpoint | `ThemeStore` (one theme writer + `defaults()`), `{siteRoot}/_templates/` loader root, section partials extracted from the demo homepage, engine starters (`landing`, `article`, `docs`, `blank`) |
-| **E2** — the writes | `_papyr/api/pages.php` (§7.1), map card actions (§7.2), Add Page form from `starter.json`, typed colour input, docs (CLAUDE.md gate table, README trash restore), `_papyr/tests/pages-test.php` |
+| **E2** — the writes                  | `_papyr/api/pages.php` (§7.1), map card actions (§7.2), Add Page form from `starter.json`, typed colour input, docs (CLAUDE.md gate table, README trash restore), `_papyr/tests/pages-test.php`  |
 
 ### 7.1 `_papyr/api/pages.php`
 
