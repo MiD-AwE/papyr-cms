@@ -84,14 +84,17 @@ $_swatches = function_exists('papyr_swatches_enumerate')
       <article class="card">
         <h2>Drop it in</h2>
         <p>One sealed <code>_papyr/</code> directory next to the site you already have. No database, no build step, no framework to fight. The Scanner finds your pages; the nav builds itself.</p>
+        <?php papyr_comments('proof-drop-in'); ?>
       </article>
       <article class="card">
         <h2>Edit anywhere</h2>
         <p>Write a page here, pull it into your own editor, change it, upload it back. PapyrCMS still tracks it — managed, and flagged as edited. The file is the source of truth, not a database row.</p>
+        <?php papyr_comments('proof-edit-anywhere'); ?>
       </article>
       <article class="card">
         <h2>Theme by hooks</h2>
         <p>Every theme token is a named hook. The registry tells you which are live, which are unused, and which a template asked for but the theme never defined. The thing you always wished a CMS would just tell you.</p>
+        <?php papyr_comments('proof-theme-hooks'); ?>
       </article>
     </section>
 
