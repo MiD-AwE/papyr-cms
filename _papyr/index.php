@@ -47,14 +47,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $writer = new PageWriter($scanner, $formSiteKey, $sites[$formSiteKey], __DIR__);
 
             if ($action === 'create') {
-                $abs  = $writer->write($formPath, $_POST['vars'] ?? []);
+                $writer->create($formPath, is_array($_POST['vars'] ?? null) ? $_POST['vars'] : []);
                 $redir = 'index.php?msg=' . urlencode("Created: {$formPath}");
                 header("Location: {$redir}");
                 exit;
 
-            } elseif ($action === 'delete') {
-                $writer->delete($formPath);
-                $redir = 'index.php?msg=' . urlencode("Deleted: {$formPath}");
+            } elseif ($action === 'trash') {
+                $moved = $writer->trash($formPath);
+                $redir = 'index.php?msg=' . urlencode("Moved to trash: {$formPath} → {$moved} (restore by moving it back)");
                 header("Location: {$redir}");
                 exit;
 
@@ -410,12 +410,12 @@ $cms = $config['cms'] ?? [];
               <td class="actions-cell">
                 <?php if (!empty($p['cms_managed'])): ?>
                   <form method="POST" style="display:inline"
-                        onsubmit="return confirm('Delete <?= h(addslashes((string)$rel)) ?>?')">
+                        onsubmit="return confirm('Move <?= h(addslashes((string)$rel)) ?> to the trash?')">
                     <input type="hidden" name="csrf"      value="<?= h($csrf) ?>">
-                    <input type="hidden" name="action"    value="delete">
+                    <input type="hidden" name="action"    value="trash">
                     <input type="hidden" name="site"      value="<?= h((string)$key) ?>">
                     <input type="hidden" name="page_path" value="<?= h((string)$rel) ?>">
-                    <button type="submit" class="btn danger">delete</button>
+                    <button type="submit" class="btn danger">trash</button>
                   </form>
                 <?php endif; ?>
               </td>
