@@ -37,6 +37,14 @@ yoursite.com/
 - **`nav.php` is the spine.** You hand-author it, and the CMS never overwrites it. It asks the engine for the current page tree (derived live, never written to disk, so it can't drift out of sync) and renders it with your own markup and styling.
 - **Theming is built in.** An HSL-token theming panel ships with the engine. Sites opt in simply by deriving their CSS from the global tokens — no configuration flags. Move the sliders and the whole page re-themes; per-page settings save as plain JSON your site owns.
 
+## Pages, drafts and the trash
+
+Signed in as admin, you can add a page from a starter layout (landing, article, docs, blank, or your own in `_templates/starters/`), in its own colours, from the dashboard or straight from a folder on the 3D site map. A new page never replaces an existing file, and nothing typed into a form ever becomes PHP. Raw PHP is something you add by editing the file.
+
+Every page can be published or turned into a draft from the map. A draft is just an `<!-- papyr:draft -->` comment near the top of the file: hidden from the navigation, still reachable by its link. Remove the line by hand and it is published.
+
+Pages Papyr created can be moved to the trash. Nothing is deleted: the file goes to `_trash/` at your site root, named with the time and its old path (`20261124-101500_docs_intro.php` was `docs/intro.php`). The web server never serves that folder. **To restore a page,** move the file back to its old place and give it its old name. Papyr picks it up on the next scan. Empty `_trash/` whenever you like.
+
 ## Status
 
 PapyrCMS is an actively developed solo project by **Chuck Middaugh (MiD-AwE)**, built to be clean enough for a public audience while staying practical for a single developer. The read-side foundation, live nav derivation, sealed-engine boundary, and theming system are in place; page-authoring and admin write-flows are gated behind session auth.

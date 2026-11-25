@@ -89,7 +89,7 @@ papyr-cms/                     ← site root (this repo doubles as the demo site
     ├── plugins/               ← core plugins (replaced with the engine); .htaccess denies .php/.json
     │   └── site-map/          ← plugin.json, plugin.php, site-map.js, three/ (Three.js r128)
     │
-    ├── tests/                 ← php _papyr/tests/{panel,plugins}-test.php (lib.php = shared harness)
+    ├── tests/                 ← php _papyr/tests/<name>-test.php (lib.php = shared harness; see Tests below)
     │
     ├── core/
     │   ├── Scanner.php        ← filesystem walker, manifest builder, draft detection
@@ -175,8 +175,21 @@ lists more than one entry.
 ### `_papyr/core/PageWriter.php` / `TemplateEngine.php`
 - `TemplateEngine::render(string $template, array $vars)`, `extractVarNames()` (strips Twig comments before scanning)
 - `TemplateEngine::normalize()` (private) — self-corrects a template name whose leading segments duplicate the loader root (e.g. a config `template` value accidentally authored as `_papyr/templates/sites/...` against a loader already rooted at `_papyr/templates`). Fixed 2026-07-09 after this exact doubling broke Add Page; derives the overlap from the loader's actual configured directories, no hardcoded path segments — same principle as `UrlResolver`.
-- `PageWriter::write($relPath, $vars)`, `delete($relPath)`, `getTemplateVarNames()`
+- `PageWriter::create($relPath, $vars, $template)` — the web path (Add Page, map card): never overwrites (409, file opened with mode `x`); `<?` in every submitted value becomes `&lt;?`, and output holding more `<?` than the template renders with empty fields is refused (422). Raw PHP stays a manual-edit feature.
+- `setDraft($relPath, bool)` — promote/demote by editing only the `<!-- papyr:draft -->` marker: after the real `<body>` (the opening PHP block is skipped), else `<head>`, else after that block, inside the first 4 KB (422 otherwise). Keeps the page's `manually_edited` flag as it was.
+- `trash($relPath)` — moves to `{siteRoot}/_trash/{YYYYmmdd-His}_{path_with_underscores}` (deny rule via `trashDir()`); restore by hand. There is no delete.
+- `write($relPath, $vars, ?$template)` — internal/tests only (overwrites). `getTemplateVarNames()` is legacy, unused.
+- Every failure goes through `fail()`: the message names site-relative paths only (safe to show), the absolute path is logged; codes `ERR_EXISTS` 409, `ERR_NOT_FOUND` 404, `ERR_REFUSED` 422.
 - `guardPath()` blocks `..`, absolute paths, null bytes, **and any path segment starting with `_`** — the write-side half of the same boundary Scanner enforces on the read side
+
+### Page writes (ADR-002 Phase E2)
+- `_papyr/api/pages.php` — POST JSON `{action, csrf, …}`: `create` (`dir`, `slug`, `layout` = a starter, `fields`, `draft`, optional `theme` written through `ThemeStore`), `promote`, `demote`, `trash`. Writes only through PageWriter; every reply carries `node` and the whole admin map graph (`root`) so the map merges it without a reload.
+- Starters (`Papyr\Core\Starters`): `{site}/_templates/starters/{name}/` wins over `_papyr/templates/starters/{name}/`; `page.html.twig` + `starter.json` (fields: text, textarea, html, url; `title` required). `papyr()->starters()` gives the admin names/labels, never paths.
+- Add Page (dashboard) renders the chosen starter's fields and posts to `pages.php`. The site-map card (admin) offers Publish / Make draft, Move to trash (Papyr-made pages, second click confirms) and New page here on folders; visitors get no file metadata (`mtime`, `cms_managed` dropped server-side).
+- `_papyr/templates/partials/hsl-sliders.php` — the one HSL slider component (`window.PapyrHsl.build/parse`), hosted by the theme panel and Add Page. Typed colours: `149 57% 43%`, commas, `hsl(…)`, `#rrggbb`, `#rgb`.
+
+### Tests
+`php _papyr/tests/<name>-test.php` for panel, plugins, themes, templates, sections, starters, deny, comments, pages, hsl, addpage, mapcard. `deny` and `comments` run XAMPP's Apache unprivileged (`startApache()`); `hsl`, `addpage` and `mapcard` need headless Chromium (mapcard with SwiftShader WebGL). Each prints SKIP and exits 0 when its tool is missing.
 
 ### `_papyr/core/AdminAuth.php`
 - `AdminAuth::verify(string $submitted): bool` — the one converged check both `login.php` and (indirectly, via session) every gated endpoint rely on
@@ -212,7 +225,7 @@ lists more than one entry.
 - **Request context (ADR-002 Phase C):** boot registers one read-only `Papyr\Core\Context`; `papyr()` returns it from any scope (it works even when nav.php is required inside a function, which globals did not).
   - Groups (§5.1): `site` (key, label, basePath, url, engineVersion, invites), `page` (key, path, title, draft, cmsManaged, modified, theme{values, source}), `tree` (pages, nested — drafts only for admin), `user` (role, displayName, csrf — `''` for visitors), `theme` (tokens, defaults, swatches), `ai` (local/cloud: a provider is *configured* — no pings on page render; the dashboard's `status()` pings). Methods: `isAdmin()`, `isMember()`, `url()`, `api()`, `browser()`.
   - Never holds secrets, hashes, filesystem paths, AI hosts/models, or raw session data. Partials needing a path derive it themselves (`__DIR__`, `Session::siteRoot()`).
-  - `window.PAPYR` (§5.2) = `{basePath, pageKey, role, csrf, api:{theme, unlock, comments, pages}}`, frozen, emitted once by `papyr_nav()`. Theme panel and comments JS read it; `api.pages` points at Phase E's endpoint (not built yet).
+  - `window.PAPYR` (§5.2) = `{basePath, pageKey, role, csrf, api:{theme, unlock, comments, pages}}`, frozen, emitted once by `papyr_nav()`. Theme panel, comments and the site-map card read it.
   - **Deprecated (0.2.x, remove in 0.3):** the `$_papyr*` globals (still set at file scope for old pages; nothing in the engine reads them) and Context's flat properties `basePath`, `label`, `pageKey`, `activePath`, `role`, `csrf`, `inviteReady`. New code uses `papyr()` groups.
 - Test: `php _papyr/tests/panel-test.php` — throw-away subfolder site over HTTP; panel per role, `window.PAPYR`, context groups, drafts, read-only, cookie path.
 - Pages boot before output: `define('PAPYR_DEFER_NAV', true);` + walk-up `require_once` above `<!DOCTYPE>`, then `<?php papyr_nav(); ?>` after `<body>`. Without the define, the last line of nav.php renders immediately (legacy pages keep working, but only get a session while PHP is still buffering output).
@@ -269,7 +282,8 @@ requests — a POST can always be sent without going through the UI.
 | `_papyr/api/save-theme.php` | ✅ admin + CSRF + same-origin, 403 JSON |
 | `_papyr/plugins/*/plugin.php`, `_plugins/*/plugin.php` | ✅ not web-runnable: entry guard (404) + folder `.htaccess` denying `.php`/`.json` (403) |
 | `_papyr/templates/partials/theme-panel.php` Commit button | ✅ hidden unless `papyr()->isAdmin()` (UX layer only — the real gate is save-theme.php) |
-| `_papyr/index.php` (dashboard + Add Page/Delete POST handlers) | ✅ admin (302 to login.php); POSTs also CSRF + same-origin |
+| `_papyr/index.php` (dashboard; its only POST is the table's trash button) | ✅ admin (302 to login.php); POSTs also CSRF + same-origin |
+| `_papyr/api/pages.php` (create / promote / demote / trash) | ✅ admin + POST only + CSRF + same-origin, 403/405 JSON; trash only for `cms_managed` pages (409) |
 | `_papyr/api/ai.php` | ✅ admin + POST only + CSRF + same-origin, 403/405 JSON |
 | `_papyr/api/unlock.php` | ✅ same-origin + per-IP throttle (no CSRF: the invite password is the proof) |
 | `_papyr/api/comments.php` | ✅ member to read; writes add CSRF + same-origin; delete admin only |

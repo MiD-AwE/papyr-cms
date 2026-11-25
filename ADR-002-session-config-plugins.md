@@ -1,6 +1,6 @@
 # ADR-002 — Sessions, Site Config, Plugin Context & Page Writes
 
-**Status:** Accepted. Phases A–D and E1 implemented; E2 pending. · **Date:** 2026-11-18 · **For:** Claude Code (implement in local XAMPP on Omarchy, phase by phase)
+**Status:** Accepted. Phases A–E implemented (E2 2026-11-24). · **Date:** 2026-11-18 · **For:** Claude Code (implement in local XAMPP on Omarchy, phase by phase)
 **Author intent captured by:** design conversation with Chuck (MiD-AWE)
 **Builds on:** ADR-001 (drop-in foundation, nav spine, theming)
 
@@ -623,6 +623,59 @@ Found during E1 and settled before E2 (2026-11-23):
   through `PageWriter::trashDir()`.
 - E2's scope is otherwise as split in §7: `pages.php`, map card actions, the Add Page form
   from `starter.json`, typed colour input, docs and `pages-test.php`.
+
+## Status — Phase E2 done (2026-11-24)
+
+| Part | Commit | Test |
+|---|---|---|
+| PageWriter `create` (no overwrite, no PHP from fields), `setDraft`, `trash`; `delete()` removed | `ca4f52d` | `tests/pages-test.php` |
+| `_papyr/api/pages.php` — create / promote / demote / trash | `e1b1b91` | `tests/pages-test.php` (78 with the above) |
+| Shared HSL component + typed colour input (theme panel host) | `f974146` | `tests/hsl-test.php` (33, Chromium) |
+| Add Page from starters, own colours (second host) | `027bca2` | `tests/addpage-test.php` (23, Chromium) |
+| Site map card actions; visitor metadata dropped | `0c705c4` | `tests/mapcard-test.php` (22, Chromium + SwiftShader) |
+| Docs: CLAUDE.md (gate table, PageWriter, tests), README (drafts, trash restore) | this commit | — |
+
+All earlier suites still pass (panel 57, plugins 67, themes 26, templates 10, sections 26,
+starters 64, deny 23, comments 47).
+
+Decisions and deviations (recorded so they stay true):
+
+- **The output check counts `<?` as text**, not with `token_get_all`. It is stricter and does
+  not depend on the `short_open_tag` setting of the machine doing the check: the output may
+  hold no more `<?` than the same template renders with every field empty (422 otherwise).
+  `create` also refuses anything but `.php`.
+- **`setDraft` placement:** after the real `<body>` (a leading PHP block is skipped; the
+  starters' boot comment mentions "<body>"), else after `<head>`, else after that PHP block,
+  else at the top of a file with no leading PHP, and always inside the first 4 KB where
+  Scanner looks; otherwise 422 with "add the marker by hand". The page's `manually_edited`
+  flag is restored after the rescan: Papyr's own edit is not a hand edit. Promote removes
+  every marker.
+- **`trash` is enforced, not just offered:** `pages.php` answers 409 for a hand-made page.
+  The page's theme file and comments stay where they are, so a restored page gets them back.
+- **No hard delete anywhere.** `PageWriter::delete()` is gone; the dashboard's row button is
+  now "trash". The dashboard's old template-variable Add Page and its POST `create` are gone:
+  Add Page posts JSON to `pages.php`.
+- **`pages.php` replies with the node and the whole admin graph** (`root`). The map merges it
+  in place (restyle, add beside the parent, remove; provider nodes kept), which also covers
+  an index page folding into its folder and new folders.
+- **`create` arguments:** `dir` (a–z0–9- segments, up to 5), `slug`, `layout` (default `blank`),
+  `fields` (a top-level `title` is accepted), `draft`, `theme`. The theme is validated before
+  the page is written; if writing it fails afterwards the page stays and the reply carries a
+  warning.
+- **File metadata for visitors** (`mtime`, `cms_managed`) is dropped server-side in the
+  plugin, not only hidden in the card.
+- **Starters reach the map through `papyr()->starters()`** (admin only, names and labels).
+- Add Page and the map's New page here both default to **Start as a draft**. The map's form
+  asks only title, name and layout; other fields take the starter's placeholders.
+
+§7.3 acceptance:
+- [x] Add Page → Landing creates a page with hero/features/cards, in the chosen colours, and
+      it is on the map after the response without a reload (addpage-test, mapcard-test).
+- [x] A site starter in `_templates/starters/` appears in Add Page (addpage-test) and survives
+      replacing `_papyr/` (starters-test).
+- [x] `hsl(149 57% 43%)` and its hex equivalent give the same sliders ±1; typed values only
+      move groups the panel discovered (hsl-test).
+- [x] Removing the starter folder later does not break pages made from it (starters-test).
 
 ## Comments invitation and invite requests (2026-11-24)
 
