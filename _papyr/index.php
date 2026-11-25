@@ -17,13 +17,12 @@ $csrf = Session::csrfToken();
 
 use Papyr\Core\NavBuilder;
 use Papyr\Core\PageWriter;
-use Papyr\Core\TemplateEngine;
+use Papyr\Core\Starters;
+use Papyr\Core\ThemeStore;
 use Papyr\Core\TokenRegistry;
+use Papyr\Core\UrlResolver;
 
 require __DIR__ . '/bootstrap.php';
-require_once __DIR__ . '/core/TemplateEngine.php';
-require_once __DIR__ . '/core/PageWriter.php';
-require_once __DIR__ . '/core/TokenRegistry.php';
 
 /* ====================================================================
    POST handler — must run before any output so header() still works.
@@ -46,13 +45,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $writer = new PageWriter($scanner, $formSiteKey, $sites[$formSiteKey], __DIR__);
 
-            if ($action === 'create') {
-                $writer->create($formPath, is_array($_POST['vars'] ?? null) ? $_POST['vars'] : []);
-                $redir = 'index.php?msg=' . urlencode("Created: {$formPath}");
-                header("Location: {$redir}");
-                exit;
-
-            } elseif ($action === 'trash') {
+            // Add Page posts JSON to api/pages.php; only the table's trash button posts here.
+            if ($action === 'trash') {
                 $moved = $writer->trash($formPath);
                 $redir = 'index.php?msg=' . urlencode("Moved to trash: {$formPath} → {$moved} (restore by moving it back)");
                 header("Location: {$redir}");
@@ -73,6 +67,7 @@ if ($postError !== null) {
 } elseif (isset($_GET['msg'])) {
     $flash = ['msg' => (string) $_GET['msg'], 'type' => 'ok'];
 }
+$created = isset($_GET['created']) && is_string($_GET['created']) ? ltrim($_GET['created'], '/') : '';
 
 /* ====================================================================
    Read-side: scan + AI status + siteView
@@ -111,17 +106,17 @@ foreach ($sites as $key => $site) {
         }
     }
 
-    // Template var names for the Add Page form
-    $templateVarNames = [];
-    $templateName     = $site['template'] ?? '';
-    if ($templateName !== '') {
-        try {
-            $engine = TemplateEngine::forSite((string) ($site['root'] ?? ''), __DIR__);
-            $templateVarNames = $engine->extractVarNames($templateName);
-        } catch (\Throwable $e) {
-            // Template missing — form will still render without auto-fields
-            error_log("[papyr index] extractVarNames($templateName) failed: " . $e->getMessage());
+    // Add Page: starters (ADR-002 §7.3), folders for the picker, theme starting values.
+    $starters = [];
+    $folders  = [];
+    if ($rootOk) {
+        $starters = (new Starters((string) $root, __DIR__))->all();
+        foreach (array_keys($pages) as $rel) {
+            for ($d = dirname((string) $rel); $d !== '.' && $d !== ''; $d = dirname($d)) {
+                $folders[$d] = true;
+            }
         }
+        ksort($folders);
     }
 
     $siteView[$key] = [
@@ -132,8 +127,10 @@ foreach ($sites as $key => $site) {
         'pages'            => $pages,
         'tree'             => $tree,
         'pagesErr'         => $pagesErr,
-        'templateVarNames' => $templateVarNames,
-        'template'         => $templateName,
+        'starters'         => $starters,
+        'folders'          => array_keys($folders),
+        'basePath'         => $rootOk ? UrlResolver::basePath((string) $root) : '',
+        'hasMap'           => isset($pages['map.php']),
     ];
 }
 
@@ -163,6 +160,7 @@ $tokenRegistry = TokenRegistry::enumerate($tokenMapPath, $templatePaths);
 $tokenRendered = TokenRegistry::render($tokenRegistry);
 
 $cms = $config['cms'] ?? [];
+$themeDefaults = (new ThemeStore((string) (reset($sites)['root'] ?? '')))->defaults();
 ?>
 <!doctype html>
 <html lang="en">
@@ -233,7 +231,24 @@ $cms = $config['cms'] ?? [];
       box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 15%,transparent);
     }
     .form-row textarea{resize:vertical;min-height:120px}
-    .form-hint{grid-column:2;font-size:.64rem;color:var(--dim);margin-top:-.3rem}
+    .form-hint{grid-column:2;font-size:.64rem;color:var(--dim);margin-top:.25rem}
+    .form-row input[type=radio],.form-row input[type=checkbox]{width:auto;flex:none;margin-top:.15rem;accent-color:var(--accent)}
+    .ap-fields textarea{min-height:4.5rem}
+    .ap-fields{border:0;display:grid;gap:.8rem}
+    .ap-fields[disabled]{display:none}
+    .ap-layouts{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:.5rem}
+    .form-row .ap-layout,.form-row .ap-check{padding-top:0;color:var(--ink);font-size:.72rem;letter-spacing:0;cursor:pointer}
+    .ap-layout{display:flex;gap:.5rem;align-items:flex-start;border:1px solid var(--line);border-radius:5px;padding:.5rem .6rem!important}
+    .ap-layout:has(input:checked){border-color:var(--accent)}
+    .ap-layout small{color:var(--dim);font-size:.64rem;line-height:1.4}
+    .ap-check{display:flex;gap:.5rem;align-items:center}
+    .ap-fields .ap-html{min-height:160px}
+    .ap-theme{margin-top:.7rem;display:grid;gap:.7rem;max-width:340px}
+    .ap-preview{border:1px solid var(--line);border-radius:5px;padding:.6rem .8rem;font-size:.72rem;display:grid;gap:.2rem}
+    .ap-actions{display:flex;gap:.8rem;align-items:center;flex-wrap:wrap}
+    .ap-msg{font-size:.7rem;color:var(--bad)}
+    .ap-msg.ok{color:var(--accent)}
+    @media (max-width:640px){.form-row{grid-template-columns:1fr}.form-row>div:empty{display:none}.form-hint{grid-column:1}}
     .btn{display:inline-block;border:1px solid var(--line);border-radius:4px;
          background:transparent;color:var(--ink);font-family:var(--mono);font-size:.72rem;
          padding:.4rem .9rem;cursor:pointer;letter-spacing:.04em;transition:border-color .15s,color .15s}
@@ -349,6 +364,12 @@ $cms = $config['cms'] ?? [];
     <div class="flash <?= h($flash['type']) ?>">
       <span class="icon"><?= $flash['type'] === 'ok' ? '✓' : '✕' ?></span>
       <?= h($flash['msg']) ?>
+      <?php if ($created !== '' && $flash['type'] === 'ok'):
+        $sv0 = reset($siteView);
+        if ($sv0 && isset($sv0['pages'][$created])): ?>
+        · <a href="<?= h($sv0['basePath'] . '/' . $created) ?>">open page</a>
+        <?php if ($sv0['hasMap']): ?>· <a href="<?= h($sv0['basePath'] . '/map.php#node=' . rawurlencode($created)) ?>">show on map</a><?php endif; ?>
+      <?php endif; endif; ?>
     </div>
   <?php endif; ?>
 
@@ -434,50 +455,89 @@ $cms = $config['cms'] ?? [];
         </table>
       <?php endif; ?>
 
-      <!-- ===== Add Page form (works without JS via <details>) ===== -->
-      <?php if ($sv['rootOk'] && $sv['template'] !== ''): ?>
-        <details class="add-page-wrap">
+      <!-- ===== Add Page: a starter, its fields, folder + name, draft, own colours (ADR-002 §7.3) ===== -->
+      <?php if ($sv['rootOk'] && $sv['starters'] !== []): $fid = 'ap-' . h((string) $key); ?>
+        <details class="add-page-wrap" id="<?= $fid ?>-wrap">
           <summary>Add Page</summary>
-          <form class="add-page-form" method="POST">
-            <input type="hidden" name="csrf"   value="<?= h($csrf) ?>">
-            <input type="hidden" name="action" value="create">
-            <input type="hidden" name="site"   value="<?= h((string)$key) ?>">
+          <form class="add-page-form" id="<?= $fid ?>" data-folders="<?= h(json_encode($sv['folders'])) ?>" novalidate>
+            <noscript><p class="form-hint">Add Page needs JavaScript.</p></noscript>
 
             <div class="form-row">
-              <label>page path</label>
-              <div>
-                <input type="text" name="page_path"
-                       placeholder="about.php" required
-                       pattern="[^/\.\.].*\.php"
-                       title="Relative path ending in .php — no .. — e.g. about.php or docs/overview.php">
-                <div class="form-hint">relative to site root · e.g. <code>about.php</code> or <code>docs/overview.php</code></div>
+              <label>layout</label>
+              <div class="ap-layouts" role="radiogroup">
+                <?php $first = true; foreach ($sv['starters'] as $name => $st): ?>
+                  <label class="ap-layout">
+                    <input type="radio" name="layout" value="<?= h($name) ?>" <?= $first ? 'checked' : '' ?>>
+                    <span><b><?= h($st['label']) ?></b><?= $st['source'] === 'site' ? ' <span class="tag">site</span>' : '' ?>
+                      <?php if ($st['description'] !== ''): ?><br><small><?= h($st['description']) ?></small><?php endif; ?></span>
+                  </label>
+                <?php $first = false; endforeach; ?>
               </div>
             </div>
 
-            <?php foreach ($sv['templateVarNames'] as $varName):
-              $optional = ($varName === 'page_class');
-              $isArea   = ($varName === 'body_content'); ?>
-              <div class="form-row">
-                <label>
-                  <?= h($varName) ?>
-                  <?php if ($optional): ?><span class="opt">(optional)</span><?php endif; ?>
-                </label>
-                <?php if ($isArea): ?>
-                  <textarea name="vars[<?= h($varName) ?>]"
-                            placeholder="HTML or plain text content…"
-                            <?= $optional ? '' : 'required' ?>></textarea>
-                <?php else: ?>
-                  <input type="text" name="vars[<?= h($varName) ?>]"
-                         placeholder="<?= h($varName) ?>"
-                         <?= $optional ? '' : 'required' ?>>
-                <?php endif; ?>
-              </div>
+            <?php foreach ($sv['starters'] as $name => $st): ?>
+              <fieldset class="ap-fields" data-layout="<?= h($name) ?>">
+                <?php foreach ($st['fields'] as $f):
+                  $fieldId = $fid . '-' . h($name) . '-' . h($f['name']); ?>
+                  <div class="form-row">
+                    <label for="<?= $fieldId ?>"><?= h($f['label']) ?><?= $f['required'] ? '' : '<span class="opt">(optional)</span>' ?></label>
+                    <div>
+                      <?php if ($f['type'] === 'textarea' || $f['type'] === 'html'): ?>
+                        <textarea id="<?= $fieldId ?>" name="<?= h($f['name']) ?>" data-field <?= $f['required'] ? 'required' : '' ?>
+                                  class="<?= $f['type'] === 'html' ? 'ap-html' : '' ?>" placeholder="<?= h($f['default']) ?>"></textarea>
+                      <?php else: ?>
+                        <input id="<?= $fieldId ?>" type="text" name="<?= h($f['name']) ?>" data-field <?= $f['required'] ? 'required' : '' ?>
+                               placeholder="<?= h($f['default']) ?>" <?= $f['name'] === 'title' ? 'data-title' : '' ?>>
+                      <?php endif; ?>
+                      <?php if ($f['help'] !== '' || $f['type'] === 'html' || $f['type'] === 'url'): ?>
+                        <div class="form-hint"><?= h($f['help']) ?>
+                          <?= $f['type'] === 'html' ? ' HTML is kept; PHP tags are not (they are written as text).' : '' ?>
+                          <?= $f['type'] === 'url' && $f['help'] === '' ? ' A site path (docs/overview.php) or a full https:// link.' : '' ?></div>
+                      <?php endif; ?>
+                    </div>
+                  </div>
+                <?php endforeach; ?>
+              </fieldset>
             <?php endforeach; ?>
+
+            <div class="form-row">
+              <label for="<?= $fid ?>-dir">folder<span class="opt">(optional)</span></label>
+              <div>
+                <input id="<?= $fid ?>-dir" type="text" name="dir" list="<?= $fid ?>-dirs" placeholder="(site root)"
+                       autocomplete="off" spellcheck="false" pattern="[a-z0-9][a-z0-9\-]*(/[a-z0-9][a-z0-9\-]*)*">
+                <datalist id="<?= $fid ?>-dirs"><?php foreach ($sv['folders'] as $d): ?><option value="<?= h($d) ?>"><?php endforeach; ?></datalist>
+                <div class="form-hint">an existing folder, or a new one (a–z, 0–9, -)</div>
+              </div>
+            </div>
+            <div class="form-row">
+              <label for="<?= $fid ?>-slug">page name</label>
+              <div>
+                <input id="<?= $fid ?>-slug" type="text" name="slug" required autocomplete="off" spellcheck="false"
+                       pattern="[a-z0-9][a-z0-9\-]*" placeholder="from the title">
+                <div class="form-hint">creates <code class="ap-path">…</code> · never replaces an existing file</div>
+              </div>
+            </div>
+            <div class="form-row">
+              <div></div>
+              <label class="ap-check"><input type="checkbox" name="draft" checked> Start as a draft (hidden from the nav until you publish it on the map)</label>
+            </div>
+
+            <div class="form-row">
+              <div></div>
+              <div>
+                <label class="ap-check"><input type="checkbox" name="own-theme" class="ap-own"> Give this page its own colours</label>
+                <div class="ap-theme" hidden>
+                  <div class="ap-preview"><b>Preview</b> <span>Body text on the background.</span> <a>A link in the accent</a></div>
+                  <div class="ap-sliders"></div>
+                </div>
+              </div>
+            </div>
 
             <div class="form-row" style="padding-top:.3rem">
               <div></div>
-              <div>
-                <button type="submit" class="btn primary">Create Page →</button>
+              <div class="ap-actions">
+                <button type="submit" class="btn primary">Create page →</button>
+                <span class="ap-msg" role="status"></span>
               </div>
             </div>
           </form>
@@ -511,6 +571,106 @@ $cms = $config['cms'] ?? [];
   </footer>
 
 </div><!-- /.wrap -->
+
+<?php include_once __DIR__ . '/templates/partials/hsl-sliders.php'; ?>
+<script>
+/* Add Page → api/pages.php (ADR-002 §7.1). The colour sliders are the shared
+   component (partials/hsl-sliders.php), starting from ThemeStore::defaults(). */
+(function () {
+  'use strict';
+  var CSRF = <?= json_encode($csrf) ?>;
+  var DEFAULTS = <?= json_encode($themeDefaults, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG) ?>;
+  var LABELS = { accent: 'Accent', accent2: 'Accent 2', bg: 'Background', text: 'Text' };
+
+  function slugify(t) {
+    return String(t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
+  }
+
+  document.querySelectorAll('form.add-page-form').forEach(function (form) {
+    var dir = form.elements.dir, slug = form.elements.slug, msg = form.querySelector('.ap-msg');
+    var pathEl = form.querySelector('.ap-path'), slugTouched = false;
+
+    function active() { return form.querySelector('input[name=layout]:checked').value; }
+    function fieldset() { return form.querySelector('.ap-fields[data-layout="' + active() + '"]'); }
+    function path() {
+      var d = dir.value.trim().replace(/^\/+|\/+$/g, '');
+      return (d ? d + '/' : '') + (slug.value.trim() || '…') + '.php';
+    }
+    function showLayout() {
+      form.querySelectorAll('.ap-fields').forEach(function (fs) { fs.disabled = fs.dataset.layout !== active(); });
+      var t = fieldset().querySelector('[data-title]');
+      if (t && !slugTouched) slug.value = slugify(t.value);
+      pathEl.textContent = path();
+    }
+    form.addEventListener('change', function (e) { if (e.target.name === 'layout') showLayout(); });
+    form.addEventListener('input', function (e) {
+      if (e.target === slug) slugTouched = slug.value !== '';
+      if (e.target.hasAttribute('data-title') && !slugTouched) slug.value = slugify(e.target.value);
+      pathEl.textContent = path();
+    });
+    showLayout();
+
+    // Own colours: an object store, so nothing on the dashboard itself changes.
+    var store = {}, tokens = [], built = null;
+    Object.keys(DEFAULTS).forEach(function (k) {
+      var m = /^(.+)-([hsl])$/.exec(k);
+      if (!m) return;
+      (store[m[1]] = store[m[1]] || {})[m[2]] = DEFAULTS[k];
+      if (tokens.indexOf(m[1]) < 0) tokens.push(m[1]);
+    });
+    var theme = form.querySelector('.ap-theme'), preview = form.querySelector('.ap-preview');
+    function css(n) { var c = store[n] || {}; return 'hsl(' + parseFloat(c.h) + ' ' + parseFloat(c.s) + '% ' + parseFloat(c.l) + '%)'; }
+    function paint() {
+      preview.style.background = css('bg'); preview.style.color = css('text');
+      preview.querySelector('a').style.color = css('accent');
+      preview.style.borderColor = css('accent2');
+    }
+    form.querySelector('.ap-own').addEventListener('change', function () {
+      theme.hidden = !this.checked;
+      if (this.checked && !built) {
+        built = window.PapyrHsl.build(form.querySelector('.ap-sliders'), {
+          tokens: tokens,
+          label:  function (n) { return LABELS[n] || n; },
+          read:   function (n, p) { return store[n][p]; },
+          write:  function (n, p, v) { store[n][p] = v; paint(); }
+        });
+        paint();
+      }
+    });
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      msg.className = 'ap-msg'; msg.textContent = '';
+      if (!form.reportValidity()) return;
+      var fields = {};
+      fieldset().querySelectorAll('[data-field]').forEach(function (el) { fields[el.name] = el.value; });
+      var body = {
+        action: 'create', csrf: CSRF, dir: dir.value.trim().replace(/^\/+|\/+$/g, ''), slug: slug.value.trim(),
+        layout: active(), fields: fields, draft: form.elements.draft.checked
+      };
+      if (form.querySelector('.ap-own').checked) {
+        body.theme = {};
+        tokens.forEach(function (n) { ['h', 's', 'l'].forEach(function (p) { body.theme[n + '-' + p] = String(store[n][p]); }); });
+      }
+      var btn = form.querySelector('button[type=submit]');
+      btn.disabled = true; msg.className = 'ap-msg ok'; msg.textContent = 'Creating…';
+      fetch('api/pages.php', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (!d.ok) { msg.className = 'ap-msg'; msg.textContent = d.error || 'Something went wrong.'; return; }
+          var note = 'Created ' + d.path + (body.draft ? ' as a draft' : '') + (d.warning ? '. ' + d.warning : '');
+          location.href = 'index.php?created=' + encodeURIComponent(d.path) + '&msg=' + encodeURIComponent(note);
+        })
+        .catch(function () { msg.className = 'ap-msg'; msg.textContent = 'Network error. Try again.'; })
+        .finally(function () { btn.disabled = false; });
+    });
+  });
+}());
+</script>
 
 <?php if ($aiAvailable): ?>
 <!-- ===== AI panel drawer ===== -->
