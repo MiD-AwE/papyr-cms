@@ -21,6 +21,7 @@ function copyTree(string $from, string $to, array $skip = []): void {
     }
 }
 function rmTree(string $d): void {
+    if (!is_dir($d) || is_link($d)) { return; }   // already gone (e.g. a shutdown cleanup ran first)
     foreach (scandir($d) ?: [] as $e) {
         if ($e === '.' || $e === '..') { continue; }
         is_dir("$d/$e") && !is_link("$d/$e") ? rmTree("$d/$e") : @unlink("$d/$e");

@@ -185,7 +185,7 @@ final class Context
             'theme'    => $b . 'save-theme.php',
             'unlock'   => $b . 'unlock.php',
             'comments' => $b . 'comments.php',
-            'pages'    => $b . 'pages.php',      // Phase E — not built yet
+            'pages'    => $b . 'pages.php',
         ];
     }
 

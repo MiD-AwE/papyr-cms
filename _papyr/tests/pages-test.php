@@ -17,6 +17,12 @@ declare(strict_types=1);
  *     "manually edited" flag is kept as it was
  *   - trash: moves to _trash/{stamp}_{path_with_underscores}, deny rule in place,
  *     name clashes get -2, the page leaves the manifest; sealed paths refused
+ *   - api/pages.php over HTTP: admin + CSRF + same origin; create with a starter,
+ *     fields, draft and a theme (written through ThemeStore), returning the node
+ *     and the whole graph; 409 on an existing path; 400s for bad names, sealed
+ *     or traversal folders, unknown layout, missing title, empty theme; PHP in
+ *     fields neutralised; promote/demote any page; trash managed pages only;
+ *     write failures name site-relative paths
  */
 
 if (PHP_SAPI !== 'cli') { exit('CLI only.'); }
@@ -135,6 +141,95 @@ try {
     check('no absolute path in any message', !str_contains((string) (function () use ($writer) {
         try { $writer->trash('nope.php'); } catch (\Throwable $e) { return $e->getMessage(); } return '';
     })(), $tmp));
+
+    /* ================= api/pages.php over HTTP ================= */
+    echo "api: gate\n";
+    file_put_contents("$site/boot.php", bootPage('<p>boot</p>'));
+    file_put_contents("$site/handmade.php", bootPage('<p>by hand</p>'));
+    [$srv, $port] = startServer($tmp);
+    $U = "http://127.0.0.1:$port/$base";
+    $O = "http://127.0.0.1:$port";
+    $API = "$U/_papyr/api/pages.php";
+    $J = fn(array $r): array => (array) json_decode($r[2], true);
+
+    [$st] = http($API);
+    check('visitor GET → 403', $st === 403, "HTTP $st");
+    $r = httpJson($API, '', ['action' => 'promote', 'path' => 'boot.php'], $O);
+    check('visitor POST → 403', $r[0] === 403, "HTTP {$r[0]}");
+    $admin = adminCookie($U, 'test-admin-pass');
+    [, , $html] = http("$U/boot.php", $admin);
+    $csrf = papyrJs($html)['csrf'] ?? '';
+    check('admin has a CSRF token and the pages endpoint', $csrf !== '' && (papyrJs($html)['api']['pages'] ?? '') === "/$base/_papyr/api/pages.php");
+    [$st] = http($API, $admin);
+    check('admin GET → 405', $st === 405, "HTTP $st");
+    $call = fn(array $b, string $origin = '') => httpJson($API, $admin, $b + ['csrf' => $csrf], $origin ?: $O);
+    $r = httpJson($API, $admin, ['action' => 'promote', 'path' => 'boot.php'], $O);
+    check('no CSRF → 403', $r[0] === 403, "HTTP {$r[0]}");
+    $r = $call(['action' => 'promote', 'path' => 'boot.php'], 'http://evil.example');
+    check('cross-origin → 403', $r[0] === 403, "HTTP {$r[0]}");
+    check('unknown action → 400', $call(['action' => 'nope'])[0] === 400);
+
+    echo "api: create\n";
+    $theme = ['accent-h' => '149', 'accent-s' => '57%', 'accent-l' => '43%', 'mode' => 'dark', 'bogus' => 'x'];
+    $r = $call(['action' => 'create', 'dir' => 'guides', 'slug' => 'start', 'layout' => 'landing',
+                'fields' => ['title' => 'Start here', 'headline' => 'Hi'], 'draft' => true, 'theme' => $theme]);
+    $d = $J($r);
+    check('created', $r[0] === 200 && ($d['ok'] ?? false) && is_file("$site/guides/start.php"), $r[2]);
+    check('landing sections in the page', str_contains((string) @file_get_contents("$site/guides/start.php"), 'class="ps-hero'));
+    check('node returned: draft, managed, own theme colour', ($d['node']['path'] ?? '') === 'guides/start.php' && ($d['node']['draft'] ?? false) === true
+        && ($d['node']['cms_managed'] ?? false) === true && ($d['node']['themed'] ?? false) === true && (int) ($d['node']['color']['h'] ?? 0) === 149, json_encode($d['node'] ?? null));
+    $saved = json_decode((string) @file_get_contents("$site/data/themes/guides_start.json"), true);
+    check('theme written through ThemeStore (unknown key dropped)', ($saved['accent-h'] ?? '') === '149' && !isset($saved['bogus']));
+    $inRoot = json_encode($d['root'] ?? [], JSON_UNESCAPED_SLASHES);
+    check('graph includes the new folder and page', str_contains($inRoot, '"id":"guides/"') && str_contains($inRoot, '"id":"guides/start.php"'));
+    $r = $call(['action' => 'create', 'dir' => 'guides', 'slug' => 'start', 'layout' => 'blank', 'fields' => ['title' => 'Again']]);
+    check('existing path → 409, site-relative message', $r[0] === 409 && str_contains($J($r)['error'] ?? '', 'guides/start.php') && !str_contains($r[2], $tmp), $r[2]);
+    check('… page untouched', str_contains((string) file_get_contents("$site/guides/start.php"), 'Start here'));
+    foreach ([
+        'bad slug'          => ['slug' => 'Bad Name'],
+        'sealed folder'     => ['dir' => '_config'],
+        'traversal folder'  => ['dir' => '../x'],
+        'unknown layout'    => ['layout' => 'nope'],
+        'missing title'     => ['fields' => []],
+        'empty theme'       => ['theme' => ['bogus' => '1']],
+    ] as $what => $over) {
+        $b = array_merge(['action' => 'create', 'dir' => '', 'slug' => 'x' . substr(md5($what), 0, 6), 'layout' => 'blank', 'fields' => ['title' => 'T']], $over);
+        $r = $call($b);
+        check("$what → 400", $r[0] === 400 && !file_exists("$site/{$b['slug']}.php"), "HTTP {$r[0]} " . $r[2]);
+    }
+    $r = $call(['action' => 'create', 'slug' => 'php-try', 'layout' => 'article',
+                'fields' => ['title' => '<?php echo 1; ?>', 'body_content' => '<?= phpinfo() ?>']]);
+    $out = (string) @file_get_contents("$site/php-try.php");
+    check('PHP in fields → written neutralised', $r[0] === 200 && str_contains($out, '&lt;?= phpinfo() ?>') && !str_contains($out, '<?= phpinfo'), $r[2]);
+    $r = $call(['action' => 'create', 'slug' => 'plain', 'title' => 'Plain title']);
+    check('"title" at the top level and default layout work', $r[0] === 200 && is_file("$site/plain.php") && ($J($r)['node']['draft'] ?? true) === false, $r[2]);
+
+    echo "api: promote / demote\n";
+    $r = $call(['action' => 'promote', 'path' => 'guides/start.php']);
+    check('promote → node no longer draft', $r[0] === 200 && ($J($r)['node']['draft'] ?? true) === false && ($J($r)['changed'] ?? false) === true, $r[2]);
+    $r = $call(['action' => 'promote', 'path' => 'guides/start.php']);
+    check('promote again → ok, unchanged', $r[0] === 200 && ($J($r)['changed'] ?? true) === false);
+    $r = $call(['action' => 'demote', 'path' => 'handmade.php']);
+    check('demote a hand-made page', $r[0] === 200 && ($J($r)['node']['draft'] ?? false) === true && ($J($r)['node']['cms_managed'] ?? true) === false, $r[2]);
+    [, , $html] = http("$U/handmade.php");
+    check('… a draft still renders for anyone with the link', str_contains($html, 'by hand'));
+    check('unknown page → 404', $call(['action' => 'demote', 'path' => 'nope.php'])[0] === 404);
+    check('engine file → 404 (not a page)', $call(['action' => 'demote', 'path' => '_papyr/index.php'])[0] === 404);
+
+    echo "api: trash\n";
+    $r = $call(['action' => 'trash', 'path' => 'handmade.php']);
+    check('hand-made page → 409, untouched', $r[0] === 409 && is_file("$site/handmade.php"), $r[2]);
+    $r = $call(['action' => 'trash', 'path' => 'plain.php']);
+    $d = $J($r);
+    check('managed page trashed', $r[0] === 200 && !file_exists("$site/plain.php") && is_file("$site/" . ($d['trashed'] ?? 'x')), $r[2]);
+    check('… node null, gone from the graph', array_key_exists('node', $d) && $d['node'] === null && !str_contains(json_encode($d['root'] ?? [], JSON_UNESCAPED_SLASHES), '"plain.php"'));
+
+    echo "api: write failures\n";
+    chmod("$site/guides", 0555);
+    $r = $call(['action' => 'create', 'dir' => 'guides', 'slug' => 'locked', 'fields' => ['title' => 'L']]);
+    chmod("$site/guides", 0755);
+    check('unwritable folder → 500 naming guides/locked.php', $r[0] === 500 && str_contains($J($r)['error'] ?? '', 'guides/locked.php'), $r[2]);
+    check('… no absolute path', !str_contains($r[2], $tmp));
 } catch (\Throwable $e) {
     check('no exception', false, get_class($e) . ': ' . $e->getMessage() . ' @' . $e->getLine());
 } finally {
