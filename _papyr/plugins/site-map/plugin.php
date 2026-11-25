@@ -56,8 +56,22 @@ if ($_psmExtra !== []) {
     $_psmTree = MapTree::attach($_psmTree, $_psmExtra, $_psmAdmin);
 }
 
+// File metadata (modified time, origin) is for the admin only (ADR-002 §7.2):
+// dropped server-side, not just hidden in the card.
+if (!$_psmAdmin) {
+    $_psmStrip = static function (array $n) use (&$_psmStrip): array {
+        unset($n['mtime'], $n['cms_managed']);
+        $n['children'] = array_map($_psmStrip, $n['children'] ?? []);
+        return $n;
+    };
+    $_psmTree = $_psmStrip($_psmTree);
+}
+
+// Admin: what the card needs to call api/pages.php (CSRF comes from window.PAPYR).
+$_psmPages = $_psmAdmin ? ['api' => $p->api()['pages'], 'starters' => $p->starters()] : null;
+
 $_psmJson = json_encode(
-    ['base' => $p->site['basePath'], 'admin' => $_psmAdmin, 'root' => $_psmTree],
+    ['base' => $p->site['basePath'], 'admin' => $_psmAdmin, 'pages' => $_psmPages, 'root' => $_psmTree],
     JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP
 );
 if ($_psmJson === false) {
@@ -177,6 +191,28 @@ $_psmAsset = static fn (string $rel): string => htmlspecialchars($p->asset('site
   position: absolute; inset: 0; display: grid; place-items: center;
   padding: 2rem; text-align: center; color: var(--text-dim); font-size: .8rem;
 }
+
+/* Admin actions (api/pages.php) */
+.psm-actions { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .8rem; }
+.psm-act {
+  font: inherit; font-size: .62rem; letter-spacing: .04em; cursor: pointer;
+  padding: .3rem .6rem; border-radius: 4px; background: none;
+  color: var(--text); border: 1px solid var(--border-bright);
+}
+.psm-act:hover, .psm-act:focus-visible { color: var(--accent); border-color: var(--accent); }
+.psm-act.is-danger:hover, .psm-act[data-armed] { color: hsl(5 80% 66%); border-color: hsl(5 80% 66%); }
+.psm-act:disabled { opacity: .5; cursor: wait; }
+.psm-new { display: grid; gap: .45rem; margin-top: .7rem; padding-top: .7rem; border-top: 1px solid var(--border); }
+.psm-new label { display: grid; gap: .2rem; color: var(--text-dim); font-size: .62rem; }
+.psm-new label.psm-inline { display: flex; align-items: center; gap: .4rem; color: var(--text); }
+.psm-new input:not([type=checkbox]), .psm-new select {
+  font: inherit; font-size: .7rem; padding: .3rem .45rem; border-radius: 4px;
+  color: var(--text); background: var(--bg); border: 1px solid var(--border-bright);
+}
+.psm-new .psm-path { margin: 0; }
+.psm-msg { margin: .5rem 0 0; font-size: .64rem; color: hsl(5 80% 70%); min-height: 1em; }
+.psm-msg.is-ok { color: var(--text-dim); }
+.psm-msg:empty { display: none; }
 
 .psm-close {
   position: absolute; top: .55rem; right: .6rem;

@@ -28,6 +28,8 @@
   }
 
   var BASE    = payload.base || '';
+  var ADMIN   = payload.admin === true;
+  var PAGES   = ADMIN && payload.pages ? payload.pages : null;   // { api, starters } for admin
   var REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   // Layout constants (tuned for sites of a handful to a few hundred pages).
@@ -163,16 +165,18 @@
   var root = build(payload.root, null, 0, 1, 0);
   readTokens();
 
-  var pageCount = nodes.filter(function (n) { return n.data.path; }).length;
-  var dirCount  = nodes.filter(function (n) { return n.data.kind === 'dir'; }).length;
-  var itemCount = nodes.filter(function (n) { return n.data.kind === 'node'; }).length;
   var summary = document.getElementById('psm-summary');
-  if (summary) {
+  function updateSummary() {
+    if (!summary) return;
+    var pageCount = nodes.filter(function (n) { return n.data.path; }).length;
+    var dirCount  = nodes.filter(function (n) { return n.data.kind === 'dir'; }).length;
+    var itemCount = nodes.filter(function (n) { return n.data.kind === 'node'; }).length;
     summary.textContent = pageCount + ' page' + (pageCount === 1 ? '' : 's') +
       (dirCount ? ' · ' + dirCount + ' folder' + (dirCount === 1 ? '' : 's') : '') +
       (itemCount ? ' · ' + itemCount + ' item' + (itemCount === 1 ? '' : 's') : '') +
       ' · live from the filesystem';
   }
+  updateSummary();
 
   // Live theme panel edits restyle edges and folder nodes.
   new MutationObserver(readTokens).observe(document.documentElement, { attributes: true, attributeFilter: ['style', 'class', 'data-theme'] });
@@ -309,12 +313,15 @@
     else html += '<p class="psm-path">' + esc(d.path ? '/' + d.path : (d.kind === 'dir' ? '/' + d.id : '/')) + '</p>';
     html += '<dl><dt>Type</dt><dd>' + kindLabel(n) + '</dd>';
     if (d.page_title && d.page_title !== d.text) html += '<dt>Page</dt><dd>' + esc(d.page_title) + '</dd>';
-    if (d.path) {
+    if (d.path && ADMIN) {
+      // File metadata is admin-only (ADR-002 §7.2); the server leaves it out for visitors.
       var c = d.color ? hsl(d.color.h, d.color.s, d.color.l).getStyle() : '';
       html += '<dt>Theme</dt><dd><span class="psm-swatch" style="background:' + c + '"></span>' +
         (d.themed ? 'own saved theme' : 'site default') + '</dd>';
       if (d.mtime) html += '<dt>Modified</dt><dd>' + esc(new Date(d.mtime * 1000).toLocaleString()) + '</dd>';
       html += '<dt>Origin</dt><dd>' + (d.cms_managed ? 'created in Papyr' : 'hand-made file') + '</dd>';
+    } else if (d.path) {
+      // visitors: title, Open page and connections only
     } else if (d.kind === 'dir') {
       html += '<dt>Index</dt><dd>none — a grouping folder</dd>';
     } else if (d.kind === 'node') {
@@ -325,6 +332,7 @@
     html += '</dl>';
     if (d.path) html += '<a class="psm-open" href="' + esc(href(n)) + '">Open page</a>';
     else if (d.kind === 'node' && d.link) html += '<a class="psm-open" href="' + esc(linkHref(n)) + '">Open</a>';
+    if (PAGES && d.kind !== 'node') html += actionsHtml(n);
 
     if (n.parent || n.children.length) {
       html += '<h3>Connections</h3><ul>';
@@ -340,6 +348,8 @@
 
   card.addEventListener('click', function (e) {
     if (e.target.closest('[data-close]')) { select(null); return; }
+    var act = e.target.closest('[data-act]');
+    if (act && selected) { onAction(act, selected); return; }
     var btn = e.target.closest('button[data-id]');
     if (btn && byId[btn.getAttribute('data-id')]) select(byId[btn.getAttribute('data-id')], true);
   });
@@ -362,6 +372,191 @@
       if (fly) flyTo(n.mesh.position, 70);
     }
     renderCard(n);
+  }
+
+  // ── Admin actions → api/pages.php (ADR-002 §7.1–7.2) ──────────────────
+  function slugify(t) {
+    return String(t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
+  }
+
+  function actionsHtml(n) {
+    var d = n.data, html = '<div class="psm-actions">';
+    if (d.path) {
+      html += d.draft
+        ? '<button type="button" class="psm-act" data-act="promote">Publish</button>'
+        : '<button type="button" class="psm-act" data-act="demote">Make draft</button>';
+      // cms_managed decides what is offered (a flag, not a lock): hand-made files are moved by hand.
+      if (d.cms_managed) html += '<button type="button" class="psm-act is-danger" data-act="trash">Move to trash</button>';
+    }
+    if (d.kind === 'root' || d.kind === 'dir') {
+      html += '<button type="button" class="psm-act" data-act="new">New page here</button>';
+    }
+    html += '</div>';
+    if (d.kind === 'root' || d.kind === 'dir') {
+      var opts = (PAGES.starters || []).map(function (s) {
+        return '<option value="' + esc(s.name) + '"' + (s.name === 'article' ? ' selected' : '') + '>' + esc(s.label) + '</option>';
+      }).join('');
+      html += '<form class="psm-new" hidden>' +
+        '<label>Title<input name="title" required maxlength="200" autocomplete="off"></label>' +
+        '<label>Page name<input name="slug" required pattern="[a-z0-9][a-z0-9\\-]*" autocomplete="off" spellcheck="false"></label>' +
+        '<label>Layout<select name="layout">' + opts + '</select></label>' +
+        '<label class="psm-inline"><input type="checkbox" name="draft" checked> Start as a draft</label>' +
+        '<p class="psm-path psm-new-path"></p>' +
+        '<div class="psm-actions"><button type="submit" class="psm-act">Create</button>' +
+        '<button type="button" class="psm-act" data-act="cancel">Cancel</button></div></form>';
+    }
+    html += '<p class="psm-msg" role="status"></p>';
+    return html;
+  }
+
+  function dirOf(n) { return n.data.kind === 'root' ? '' : String(n.data.id).replace(/\/+$/, ''); }
+
+  function say(text, ok) {
+    var m = card.querySelector('.psm-msg');
+    if (m) { m.textContent = text; m.classList.toggle('is-ok', !!ok); }
+  }
+
+  function call(body) {
+    body.csrf = (window.PAPYR && window.PAPYR.csrf) || '';
+    card.querySelectorAll('.psm-act').forEach(function (b) { b.disabled = true; });
+    say('Working…', true);
+    return fetch(PAGES.api, {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    })
+      .then(function (r) { return r.json(); })
+      .catch(function () { return { ok: false, error: 'Network error. Try again.' }; })
+      .then(function (d) {
+        card.querySelectorAll('.psm-act').forEach(function (b) { b.disabled = false; });
+        if (!d || !d.ok) { say((d && d.error) || 'Something went wrong.'); return null; }
+        return d;
+      });
+  }
+
+  function onAction(btn, n) {
+    var act = btn.getAttribute('data-act'), form = card.querySelector('.psm-new');
+    if (act === 'new') { form.hidden = false; form.elements.title.focus(); newPath(form, n); return; }
+    if (act === 'cancel') { form.hidden = true; return; }
+    if (act === 'trash' && !btn.hasAttribute('data-armed')) {
+      btn.setAttribute('data-armed', '');
+      btn.textContent = 'Click again to move to _trash/';
+      setTimeout(function () { if (btn.isConnected) { btn.removeAttribute('data-armed'); btn.textContent = 'Move to trash'; } }, 4000);
+      return;
+    }
+    var path = n.data.path, parent = n.parent;
+    call({ action: act, path: path }).then(function (d) {
+      if (!d) return;
+      reconcile(d.root);
+      if (act === 'trash') {
+        var p = parent && nodes.indexOf(parent) >= 0 ? parent : root;
+        select(p, true);
+        say('Moved to ' + d.trashed + '. Restore it by moving the file back.', true);
+      } else {
+        select(findByPath(path) || n, false);
+        say(act === 'promote' ? 'Published: it shows in the nav now.' : 'Now a draft: hidden from the nav, still reachable by its link.', true);
+      }
+    });
+  }
+
+  function newPath(form, n) {
+    var d = dirOf(n);
+    form.querySelector('.psm-new-path').textContent = '/' + (d ? d + '/' : '') + (form.elements.slug.value || '…') + '.php';
+  }
+
+  card.addEventListener('input', function (e) {
+    var form = e.target.form;
+    if (!form || !form.classList.contains('psm-new') || !selected) return;
+    if (e.target.name === 'slug') form.dataset.touched = form.elements.slug.value ? '1' : '';
+    if (e.target.name === 'title' && !form.dataset.touched) form.elements.slug.value = slugify(e.target.value);
+    newPath(form, selected);
+  });
+
+  card.addEventListener('submit', function (e) {
+    var form = e.target;
+    if (!form.classList.contains('psm-new') || !selected) return;
+    e.preventDefault();
+    if (!form.reportValidity()) return;
+    var dir = dirOf(selected), draft = form.elements.draft.checked;
+    call({ action: 'create', dir: dir, slug: form.elements.slug.value.trim(), layout: form.elements.layout.value,
+           fields: { title: form.elements.title.value }, draft: draft }).then(function (d) {
+      if (!d) return;
+      reconcile(d.root);
+      var made = findByPath(d.path);
+      if (made) select(made, true);
+      say('Created /' + d.path + (draft ? ' as a draft' : '') + '. Open it to fill in the rest, or edit the file.', true);
+    });
+  });
+
+  function findByPath(path) {
+    for (var i = 0; i < nodes.length; i++) if (nodes[i].data.path === path) return nodes[i];
+    return null;
+  }
+
+  // Merge a fresh graph from the server into the live one: page/folder nodes
+  // are updated in place, added next to their parent, or removed; provider
+  // nodes (kind "node") stay unless their parent went away. No reload, and
+  // the layout only re-settles around what changed.
+  function restyle(n) {
+    var d = n.data;
+    n.mesh.geometry = sphere(d.kind);
+    n.mesh.material.dispose();
+    n.mesh.material = makeMaterial(d);
+    n.baseEmissive = n.mesh.material.emissiveIntensity;
+    n.mesh.children.slice().forEach(function (c) { n.mesh.remove(c); });
+    if (d.draft) {
+      n.mesh.add(new THREE.Mesh(sphere(d.kind), new THREE.MeshBasicMaterial({
+        color: n.mesh.material.color, wireframe: true, transparent: true, opacity: 0.6
+      })));
+    }
+    n.label.className = 'psm-label is-' + d.kind + (d.draft ? ' is-draft' : '') + (n === selected ? ' is-selected' : '');
+    n.label.textContent = d.text + (d.draft ? ' (draft)' : '');
+    n.labelSize = null;
+    if (n === selected) { n.mesh.scale.setScalar(1.3); setGlow(n, 0.45); }
+  }
+
+  function removeNode(n) {
+    n.children.slice().forEach(removeNode);
+    if (n === selected) select(null);
+    if (n === hovered) hovered = null;
+    group.remove(n.mesh);
+    n.mesh.material.dispose();
+    for (var i = edges.length - 1; i >= 0; i--) {
+      if (edges[i].a === n || edges[i].b === n) {
+        group.remove(edges[i].line);
+        edges[i].line.geometry.dispose();
+        edges.splice(i, 1);
+      }
+    }
+    if (n.label.parentNode) n.label.parentNode.removeChild(n.label);
+    if (n.parent) n.parent.children.splice(n.parent.children.indexOf(n), 1);
+    nodes.splice(nodes.indexOf(n), 1);
+    delete byId[n.data.id];
+  }
+
+  function reconcile(fresh) {
+    var seen = {};
+    (function walk(d, parentNode) {
+      seen[d.id] = true;
+      var n = byId[d.id];
+      if (n) {
+        var kids = d.children || [];
+        n.data = Object.assign({}, d, { children: [] });
+        restyle(n);
+        kids.forEach(function (k, i) { walk(k, n); });
+      } else if (parentNode) {
+        var made = build(d, parentNode, parentNode.children.length, parentNode.children.length + 1, parentNode.level + 1);
+        (function mark(x) { seen[x.id] = true; (x.children || []).forEach(mark); })(d);
+        return made;
+      }
+    })(fresh, null);
+    nodes.slice().forEach(function (n) {
+      if (n.data.kind !== 'node' && !seen[n.data.id] && nodes.indexOf(n) >= 0) removeNode(n);
+    });
+    meshes = nodes.map(function (n) { return n.mesh; });
+    readTokens();
+    settled = false;
+    updateSummary();
   }
 
   // ── Camera glide ──────────────────────────────────────────────────────
@@ -398,7 +593,7 @@
   // ── Pointer input ─────────────────────────────────────────────────────
   var raycaster = new THREE.Raycaster();
   var pointer = new THREE.Vector2();
-  var meshes = nodes.map(function (n) { return n.mesh; });
+  var meshes = nodes.map(function (n) { return n.mesh; });   // refreshed by reconcile()
   var downAt = null;
 
   function pick(e) {

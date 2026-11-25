@@ -177,6 +177,22 @@ final class Context
         return ['values' => array_merge($defaults, $saved), 'source' => $saved === [] ? 'default' : 'page', 'saved' => $saved];
     }
 
+    /**
+     * Page starters for creating pages (ADR-002 §7.3): [{name, label, description}],
+     * admin only (empty otherwise), never file paths.
+     */
+    public function starters(): array
+    {
+        if (!$this->isAdmin() || $this->root === '') {
+            return [];
+        }
+        $out = [];
+        foreach ((new Starters($this->root, dirname(__DIR__)))->all() as $name => $s) {
+            $out[] = ['name' => $name, 'label' => $s['label'], 'description' => $s['description']];
+        }
+        return $out;
+    }
+
     /** Engine endpoint URLs — the same map window.PAPYR.api carries. */
     public function api(): array
     {
