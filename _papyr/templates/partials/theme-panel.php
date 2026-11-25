@@ -11,7 +11,8 @@ declare(strict_types=1);
  * What it provides:
  *   - A fixed ⚙ toggle button (bottom-left).
  *   - A slide-up panel that discovers HSL token triplets (--*-h/s/l)
- *     from the page's computed :root and builds a slider group for each.
+ *     from the page's computed :root and builds a slider group for each,
+ *     with a typed colour field (the shared component in hsl-sliders.php).
  *   - Dark/Light polarity flip (hues preserved, luminance inverted).
  *   - Reset: restores original :root values captured on open.
  *   - Commit: POSTs current component values to save-theme.php and writes
@@ -112,38 +113,7 @@ $_tpLogin  = htmlspecialchars($_tpBase . '/_papyr/login.php', ENT_QUOTES, 'UTF-8
   color: var(--text-dim, rgba(200,210,226,.45));
 }
 
-.tp-group { margin-bottom: .85rem; }
-.tp-group-label {
-  font-size: .5rem; letter-spacing: .2em; text-transform: uppercase;
-  color: var(--text-dim, rgba(200,210,226,.45)); margin-bottom: .35rem; display: block;
-}
-.tp-row { display: flex; align-items: center; gap: .5rem; margin-bottom: .3rem; }
-.tp-row label {
-  font-size: .5rem; letter-spacing: .12em;
-  color: var(--text-faint, rgba(200,210,226,.22));
-  width: 14px; flex-shrink: 0; text-transform: uppercase;
-}
-.tp-row input[type=range] {
-  -webkit-appearance: none; appearance: none; flex: 1; height: 3px;
-  background: var(--tp-track, rgba(90, 209, 197, .2)); border-radius: 2px; outline: none; cursor: pointer;
-}
-.tp-row input[type=range]::-webkit-slider-thumb {
-  -webkit-appearance: none; width: 12px; height: 12px;
-  border-radius: 50%; background: var(--accent, #5ad1c5); cursor: pointer;
-  box-shadow: 0 0 6px var(--tp-track, rgba(90, 209, 197, .4));
-}
-.tp-row input[type=range]::-moz-range-thumb {
-  width: 12px; height: 12px; border: none; border-radius: 50%;
-  background: var(--accent, #5ad1c5); cursor: pointer;
-}
-.tp-row .tp-val {
-  font-size: .48rem; color: var(--text-faint, rgba(200,210,226,.22));
-  width: 30px; text-align: right; flex-shrink: 0; font-variant-numeric: tabular-nums;
-}
-.tp-swatch {
-  width: 100%; height: 8px; border-radius: 2px; margin-top: .25rem;
-  border: 1px solid var(--border, rgba(90,140,200,.09));
-}
+/* Slider groups, swatches and typed colour fields: partials/hsl-sliders.php (shared with Add Page). */
 
 .tp-controls { display: flex; gap: .4rem; margin-top: .5rem; flex-wrap: wrap; }
 .tp-btn {
@@ -207,6 +177,7 @@ $_tpLogin  = htmlspecialchars($_tpBase . '/_papyr/login.php', ENT_QUOTES, 'UTF-8
   </div>
 </div>
 
+<?php include_once __DIR__ . '/hsl-sliders.php'; ?>
 <?php if (!$_tp->ready): ?>
 <script>
 window.PAPYR = window.PAPYR || Object.freeze(<?= json_encode(
@@ -267,60 +238,17 @@ window.PAPYR = window.PAPYR || Object.freeze(<?= json_encode(
     return labels[name] || name.replace(/-/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
   }
 
-  /* ---- Build slider groups from discovered tokens ---- */
+  /* ---- Slider groups: the shared HSL component (hsl-sliders.php) ----
+     Reads and writes :root only — the ephemeral user tier. Commit is separate. */
   var TOKENS = discoverTokens();
+  var SLIDERS = null;
 
   function buildGroups() {
-    var container = document.getElementById('tp-token-groups');
-    container.innerHTML = '';
-    TOKENS.forEach(function (name) {
-      var base  = '--' + name;
-      var group = document.createElement('div');
-      group.className        = 'tp-group';
-      group.dataset.token    = name;
-
-      var lbl = document.createElement('span');
-      lbl.className   = 'tp-group-label';
-      lbl.textContent = tokenLabel(name);
-      group.appendChild(lbl);
-
-      [['H', base + '-h', 0, 360, ''],
-       ['S', base + '-s', 0, 100, '%'],
-       ['L', base + '-l', 0, 100, '%']].forEach(function (def) {
-        var cssVar = def[1];
-        var unit   = def[4];
-        var row    = document.createElement('div');
-        row.className = 'tp-row';
-
-        var label = document.createElement('label');
-        label.textContent = def[0];
-
-        var inp      = document.createElement('input');
-        inp.type     = 'range';
-        inp.min      = def[2];
-        inp.max      = def[3];
-        inp.dataset.var  = cssVar;
-        inp.dataset.unit = unit;
-
-        var valSpan = document.createElement('span');
-        valSpan.className = 'tp-val';
-
-        inp.addEventListener('input', function () {
-          ROOT.style.setProperty(cssVar, inp.value + unit);
-          valSpan.textContent = inp.value + unit;
-        });
-
-        row.appendChild(label);
-        row.appendChild(inp);
-        row.appendChild(valSpan);
-        group.appendChild(row);
-      });
-
-      var swatch = document.createElement('div');
-      swatch.className = 'tp-swatch';
-      swatch.style.background = 'hsl(var(' + base + '-h) var(' + base + '-s) var(' + base + '-l))';
-      group.appendChild(swatch);
-      container.appendChild(group);
+    SLIDERS = window.PapyrHsl.build(document.getElementById('tp-token-groups'), {
+      tokens: TOKENS,
+      label:  tokenLabel,
+      read:   function (name, part) { return getComputedStyle(ROOT).getPropertyValue('--' + name + '-' + part).trim(); },
+      write:  function (name, part, value) { ROOT.style.setProperty('--' + name + '-' + part, value); }
     });
   }
 
@@ -338,12 +266,7 @@ window.PAPYR = window.PAPYR || Object.freeze(<?= json_encode(
   }
 
   function syncSlidersFromRoot() {
-    var cs = getComputedStyle(ROOT);
-    document.querySelectorAll('#tp-token-groups input[type=range]').forEach(function (inp) {
-      var raw = cs.getPropertyValue(inp.dataset.var).trim();
-      inp.value = parseFloat(raw);
-      inp.nextElementSibling.textContent = inp.value + (inp.dataset.unit || '');
-    });
+    if (SLIDERS) SLIDERS.sync();
   }
 
   /* ---- Dark / light polarity flip ---- */
